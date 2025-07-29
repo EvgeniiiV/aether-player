@@ -13,9 +13,10 @@ document.addEventListener('DOMContentLoaded', () => {
             button.classList.remove('playing');
             button.textContent = '▶️ Play';
         });
+        console.log("[SYNC] Все индикаторы треков очищены");
     }
     
-    function setActiveTrackIndicator(trackPath, fromClick = false) {
+    function setActiveTrackIndicator(trackPath, fromClick = false, playerState = 'playing') {
         // Сначала пробуем точное совпадение
         let targetButton = document.querySelector(`.play-button[data-filepath="${trackPath}"]`);
         
@@ -35,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (!targetButton) {
+            console.log(`[SYNC] Кнопка для трека "${trackPath}" не найдена на этой странице`);
             return;
         }
         
@@ -44,9 +46,18 @@ document.addEventListener('DOMContentLoaded', () => {
             button.textContent = '▶️ Play';
         });
         
-        // Устанавливаем индикацию для текущего трека
+        // Устанавливаем индикацию в зависимости от состояния плеера
         targetButton.classList.add('playing');
-        targetButton.textContent = '🎵 Playing';
+        if (playerState === 'playing') {
+            targetButton.textContent = '🎵 Playing';
+        } else if (playerState === 'paused') {
+            targetButton.textContent = '⏸️ Paused';
+        } else {
+            // Для любого другого состояния показываем как активный
+            targetButton.textContent = '🎵 Active';
+        }
+        
+        console.log(`[SYNC] Индикатор установлен: трек="${trackPath}", состояние="${playerState}", кнопка найдена`);
     }
     
     // Детектор проблем и восстановление
@@ -160,9 +171,10 @@ document.addEventListener('DOMContentLoaded', () => {
             
             nowPlayingInfo.innerHTML = `<strong>Статус:</strong> ${stateText}<br><strong>Файл:</strong> ${trackInfo}`;
             
-            // Устанавливаем индикацию активного трека (от сервера)
+            // Синхронизируем индикацию трека на ВСЕХ устройствах в сети
             if (data.track) {
-                setActiveTrackIndicator(data.track, false);
+                console.log(`[SYNC] Синхронизация индикации: трек="${data.track}", состояние="${data.state}"`);
+                setActiveTrackIndicator(data.track, false, data.state);
             }
             
             if (data.state === 'playing') {
@@ -298,8 +310,8 @@ document.addEventListener('DOMContentLoaded', () => {
         button.addEventListener('click', function() {
             const filepath = this.dataset.filepath;
             
-            // Устанавливаем индикацию от клика
-            setActiveTrackIndicator(filepath, true);
+            // Устанавливаем немедленную индикацию "играет" при клике
+            setActiveTrackIndicator(filepath, true, 'playing');
             
             fetch('/play', {
                 method: 'POST',
