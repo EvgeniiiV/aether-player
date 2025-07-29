@@ -115,6 +115,34 @@ MEDIA_ROOT = "/mnt/hdd"
 MPV_SOCKET = "/tmp/mpvsocket"
 MEDIA_EXTENSIONS = ['.flac', '.wav', '.wv', '.dsf', '.dff', '.mp3', '.mkv', '.mp4', '.avi']
 
+def get_best_audio_device():
+    """Автоматически определяет лучшее доступное аудио устройство"""
+    try:
+        # Проверяем доступные аудио карты
+        with open('/proc/asound/cards', 'r') as f:
+            cards = f.read()
+        
+        # Приоритет устройств (от лучшего к худшему)
+        audio_priorities = [
+            ('Scarlett', 'alsa/hw:1,0'),  # Focusrite Scarlett 2i2
+            ('USB', 'alsa/hw:1,0'),       # Любое USB аудио
+            ('vc4hdmi0', 'alsa/hw:2,0'),  # HDMI выход 1
+            ('Headphones', 'alsa/hw:0,0') # Встроенный 3.5mm
+        ]
+        
+        for device_name, alsa_device in audio_priorities:
+            if device_name in cards:
+                logger.info(f"Выбрано аудио устройство: {device_name} ({alsa_device})")
+                return alsa_device
+        
+        # Если ничего не найдено, используем по умолчанию
+        logger.warning("Не удалось определить аудио устройство, используем по умолчанию")
+        return "auto"
+        
+    except Exception as e:
+        logger.error(f"Ошибка определения аудио устройства: {e}")
+        return "auto"
+
 # Глобальные переменные
 player_process = None
 last_position_update = time.time()
@@ -216,8 +244,19 @@ def ensure_mpv_is_running():
         except:
             pass
         
-        # Запускаем MPV
-        command = ["mpv", "--idle", f"--input-ipc-server={MPV_SOCKET}", "--fs", "--no-video"]
+        # Запускаем MPV с оптимальными настройками аудио
+        audio_device = get_best_audio_device()
+        command = [
+            "mpv", 
+            "--idle", 
+            f"--input-ipc-server={MPV_SOCKET}", 
+            "--fs", 
+            "--no-video",
+            f"--audio-device={audio_device}",  # Автоматически определенное устройство
+            "--volume=80",                     # Начальная громкость 80%
+            "--audio-channels=stereo",         # Стерео режим
+            "--audio-samplerate=48000"         # Высокое качество звука
+        ]
         from subprocess import DEVNULL
         mpv_pid = isolated_popen(command, stdout=DEVNULL, stderr=DEVNULL)
         
