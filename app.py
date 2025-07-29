@@ -668,6 +668,102 @@ if __name__ == "__main__":
     # Запускаем MPV
     ensure_mpv_is_running()
     
+@app.route("/monitor")
+def monitor_page():
+    """Страница мониторинга системы"""
+    import subprocess
+    import glob
+    import os
+    
+    # Получаем текущие параметры системы
+    try:
+        # Температура CPU
+        temp_result = subprocess.run(['cat', '/sys/class/thermal/thermal_zone0/temp'], capture_output=True, text=True)
+        temp_celsius = float(temp_result.stdout.strip()) / 1000 if temp_result.returncode == 0 else 0
+        
+        # Использование диска
+        disk_result = subprocess.run(['df', '-h', '/'], capture_output=True, text=True)
+        disk_usage = "Неизвестно"
+        if disk_result.returncode == 0:
+            lines = disk_result.stdout.strip().split('\n')
+            if len(lines) > 1:
+                disk_usage = lines[1].split()[4]  # Процент использования
+        
+        # Использование память
+        mem_result = subprocess.run(['free', '-m'], capture_output=True, text=True)
+        memory_usage = "Неизвестно"
+        if mem_result.returncode == 0:
+            lines = mem_result.stdout.strip().split('\n')
+            if len(lines) > 1:
+                mem_data = lines[1].split()
+                total_mem = int(mem_data[1])
+                used_mem = int(mem_data[2])
+                memory_usage = f"{round(used_mem/total_mem*100, 1)}%"
+        
+        # Статус сервиса
+        service_status = "Работает (ручной запуск)"
+        try:
+            service_result = subprocess.run(['systemctl', 'is-active', 'aether-player.service'], 
+                                          capture_output=True, text=True)
+            if service_result.returncode == 0 and service_result.stdout.strip() == 'active':
+                service_status = "Работает (systemd)"
+            else:
+                service_status = "Остановлен"
+        except:
+            pass  # Сервис не настроен
+            
+    except Exception as e:
+        logger.error(f"Ошибка получения данных мониторинга: {e}")
+        temp_celsius = 0
+        disk_usage = "Ошибка"
+        memory_usage = "Ошибка"
+        service_status = "Ошибка"
+    
+    # Получаем последние отчеты
+    reports = []
+    try:
+        report_files = glob.glob('/tmp/aether-monitor-*.txt')
+        report_files.sort(key=os.path.getmtime, reverse=True)
+        for report_file in report_files[:5]:  # Последние 5 отчетов
+            mtime = os.path.getmtime(report_file)
+            reports.append({
+                'file': os.path.basename(report_file),
+                'time': subprocess.run(['date', '-d', f'@{mtime}', '+%d.%m.%Y %H:%M'], 
+                                     capture_output=True, text=True).stdout.strip()
+            })
+    except Exception as e:
+        logger.error(f"Ошибка получения отчетов: {e}")
+    
+    monitor_data = {
+        'temperature': temp_celsius,
+        'disk_usage': disk_usage,
+        'memory_usage': memory_usage,
+        'service_status': service_status,
+        'reports': reports
+    }
+    
+    return render_template('monitor.html', **monitor_data)
+
+@app.route("/monitor/report/<filename>")
+def view_report(filename):
+    """Просмотр конкретного отчета"""
+    import os
+    
+    # Проверяем безопасность имени файла
+    if not filename.startswith('aether-monitor-') or '..' in filename:
+        return "Недопустимое имя файла", 400
+    
+    report_path = f'/tmp/{filename}'
+    if not os.path.exists(report_path):
+        return "Отчет не найден", 404
+    
+    try:
+        with open(report_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return f"<pre style='font-family: monospace; background: #f5f5f5; padding: 20px;'>{content}</pre>"
+    except Exception as e:
+        return f"Ошибка чтения отчета: {e}", 500
+
     # Фоновая задача отключена - используем HTTP-механизм обновления
     # socketio.start_background_task(target=status_update_task)
     
