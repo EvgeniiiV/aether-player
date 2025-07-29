@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aether Player</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #222; color: #eee; max-width: 900px; margin: 20px auto; padding-bottom: 150px; }
+        a { color: #8af; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        ul { list-style-type: none; padding-left: 0; }
+        li { margin-bottom: 10px; display: flex; align-items: center; padding: 10px; border-radius: 5px; }
+        li:nth-child(odd) { background-color: #2a2a2a; }
+        li:hover { background-color: #383838; }
+        .icon { margin-right: 15px; font-size: 1.2em; }
+        .action-button { margin-left: auto; background: #4a4; border: none; color: white; padding: 8px 12px; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; text-align: center; }
+        .action-button.view-button { background-color: #44c; }
+        .action-button.playing { background-color: #8a4; }
+        #upload-section, #create-folder-section { background-color: #2a2a2a; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        #now-playing-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #111; padding: 15px; border-top: 1px solid #444; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .controls { display: flex; gap: 15px; align-items: center; }
+        .control-button { background: #44c; border: none; color: white; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 1.2em; }
+        #progress-container, #volume-container { width: 80%; max-width: 800px; display: flex; align-items: center; gap: 10px; }
+        .slider { flex-grow: 1; width: 100%; cursor: pointer; }
+        #progress-bar { 
+            cursor: pointer; 
+            height: 15px; 
+            -webkit-appearance: none;
+            appearance: none;
+            background: #333; 
+            border-radius: 10px;
+            overflow: hidden;
+            outline: none;
+        }
+        #progress-bar::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #4488ff;
+            cursor: pointer;
+            border: none;
+            box-shadow: -410px 0 0 400px #4488ff;
+        }
+        #progress-bar::-moz-range-thumb {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #4488ff;
+            cursor: pointer;
+            border: none;
+            box-shadow: -410px 0 0 400px #4488ff;
+        }
+        /* Стили для touch-устройств */
+        @media (pointer: coarse) {
+            #progress-bar::-webkit-slider-thumb {
+                width: 24px;
+                height: 24px;
+            }
+            #progress-bar::-moz-range-thumb {
+                width: 24px;
+                height: 24px;
+            }
+            #progress-bar {
+                height: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Aether Player</h1>
+    <h3>Текущая папка: /{{ current_subpath }}</h3>
+
+    <!-- Секция для создания папок -->
+    <div id="create-folder-section">
+        <form id="create-folder-form">
+            <input type="text" id="new-folder-name" placeholder="Имя новой папки" required>
+            <button type="submit">Создать папку</button>
+        </form>
+    </div>
+
+    <!-- Файловый браузер -->
+    <ul>
+        {% if parent_path is not none %}
+        <li><span class="icon">⤴️</span> <a href="{{ url_for('browse', subpath=parent_path) }}">.. (На уровень выше)</a></li>
+        {% endif %}
+        {% for folder in folders %}
+        <li><span class="icon">📁</span> <a href="{{ url_for('browse', subpath=current_subpath + '/' + folder if current_subpath else folder) }}">{{ folder }}</a></li>
+        {% endfor %}
+        {% for file in files %}
+        <li>
+            {% set file_path = current_subpath + '/' + file if current_subpath else file %}
+            {% if file.lower().endswith(('.jpg', '.jpeg', '.png')) %} 
+                <span class="icon">🖼️</span>
+                <span>{{ file }}</span>
+                <!-- ОБНОВЛЕНИЕ: Снова кнопка, а не ссылка -->
+                <button class="action-button view-button" data-filepath="{{ file_path }}">👁️ View</button>
+            {% else %}
+                {% if file.lower().endswith(('.mkv', '.mp4', '.avi')) %} <span class="icon">🎬</span> {% else %} <span class="icon">🎵</span> {% endif %}
+                <span>{{ file }}</span>
+                <button class="action-button play-button" data-filepath="{{ file_path }}">▶️ Play</button>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+
+    <!-- Секция для загрузки файлов -->
+    <div id="upload-section">
+        <h4>Загрузить файлы в текущую папку</h4>
+        <form id="upload-form">
+            <input type="file" id="file-input" multiple>
+            <button type="submit">Загрузить</button>
+        </form>
+        <div id="upload-progress-container"></div>
+    </div>
+
+    <!-- ФИНАЛЬНАЯ ПАНЕЛЬ УПРАВЛЕНИЯ -->
+    <div id="now-playing-bar">
+        <div id="now-playing-info"><strong>Статус:</strong> Остановлено</div>
+        <div id="progress-container">
+            <span id="current-time" data-time="0">00:00</span>
+            <input type="range" id="progress-bar" class="slider" value="0" min="0" max="100" step="0.1">
+            <span id="total-time" data-time="0">00:00</span>
+        </div>
+        <div class="controls">
+            <!-- НОВАЯ КНОПКА PREVIOUS -->
+            <button class="control-button" id="prev-button">⏮️</button>
+            <button class="control-button" id="play-pause-button">▶️</button>
+            <button class="control-button" id="stop-button">⏹️</button>
+            <!-- НОВАЯ КНОПКА NEXT -->
+            <button class="control-button" id="next-button">⏭️</button>
+        </div>
+        <div id="volume-container">
+            <input type="range" id="volume-slider" class="slider" value="100" min="0" max="100">
+            <span id="volume-percent">100%</span>
+        </div>
+    </div>
+
+    <!-- Убираем зависимость от Socket.IO -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
