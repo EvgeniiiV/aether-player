@@ -96,6 +96,129 @@
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         }
         
+        .system-control-section {
+            background: #fff;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+        
+        .system-control-section h2 {
+            color: #4a5568;
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+        }
+        
+        .system-control-section h2::before {
+            content: "🎛️";
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+        
+        .control-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .control-card {
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            border-left: 4px solid;
+            transition: all 0.3s ease;
+        }
+        
+        .control-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .control-card.safe { border-left-color: #48bb78; }
+        .control-card.reboot { border-left-color: #4299e1; }
+        .control-card.shutdown { border-left-color: #f56565; }
+        .control-card.cancel { border-left-color: #ed8936; }
+        
+        .control-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .control-icon {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .control-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #4a5568;
+        }
+        
+        .control-description {
+            color: #718096;
+            font-size: 0.9em;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+        
+        .control-btn {
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+        
+        .safe-btn {
+            background: linear-gradient(135deg, #48bb78, #38a169);
+            color: white;
+        }
+        
+        .safe-btn:hover {
+            background: linear-gradient(135deg, #38a169, #2f855a);
+            transform: translateY(-2px);
+        }
+        
+        .reboot-btn {
+            background: linear-gradient(135deg, #4299e1, #3182ce);
+            color: white;
+        }
+        
+        .reboot-btn:hover {
+            background: linear-gradient(135deg, #3182ce, #2c5282);
+            transform: translateY(-2px);
+        }
+        
+        .shutdown-btn {
+            background: linear-gradient(135deg, #f56565, #e53e3e);
+            color: white;
+        }
+        
+        .shutdown-btn:hover {
+            background: linear-gradient(135deg, #e53e3e, #c53030);
+            transform: translateY(-2px);
+        }
+        
+        .cancel-btn {
+            background: linear-gradient(135deg, #ed8936, #dd6b20);
+            color: white;
+        }
+        
+        .cancel-btn:hover {
+            background: linear-gradient(135deg, #dd6b20, #c05621);
+            transform: translateY(-2px);
+        }
+        
         .reports-section h2 {
             color: #4a5568;
             margin-top: 0;
@@ -269,6 +392,56 @@
             </div>
         </div>
         
+        <div class="system-control-section">
+            <h2>Управление системой</h2>
+            
+            <div class="control-grid">
+                <div class="control-card safe">
+                    <div class="control-header">
+                        <div class="control-icon">💾</div>
+                        <div class="control-title">Безопасное отключение HDD</div>
+                    </div>
+                    <p class="control-description">Синхронизирует данные и отключает внешний диск</p>
+                    <button class="control-btn safe-btn" onclick="systemAction('umount_hdd')">
+                        💾 Отключить диск
+                    </button>
+                </div>
+                
+                <div class="control-card reboot">
+                    <div class="control-header">
+                        <div class="control-icon">🔄</div>
+                        <div class="control-title">Перезагрузка</div>
+                    </div>
+                    <p class="control-description">Перезагружает Raspberry Pi через 1 минуту</p>
+                    <button class="control-btn reboot-btn" onclick="systemAction('reboot')">
+                        🔄 Перезагрузить
+                    </button>
+                </div>
+                
+                <div class="control-card shutdown">
+                    <div class="control-header">
+                        <div class="control-icon">⚡</div>
+                        <div class="control-title">Выключение</div>
+                    </div>
+                    <p class="control-description">Безопасно выключает Raspberry Pi через 1 минуту</p>
+                    <button class="control-btn shutdown-btn" onclick="systemAction('shutdown')">
+                        ⚡ Выключить
+                    </button>
+                </div>
+                
+                <div class="control-card cancel">
+                    <div class="control-header">
+                        <div class="control-icon">❌</div>
+                        <div class="control-title">Отмена</div>
+                    </div>
+                    <p class="control-description">Отменяет запланированное выключение/перезагрузку</p>
+                    <button class="control-btn cancel-btn" onclick="cancelShutdown()">
+                        ❌ Отменить
+                    </button>
+                </div>
+            </div>
+        </div>
+        
         <div class="reports-section">
             <h2>Отчеты мониторинга</h2>
             
@@ -310,6 +483,129 @@
             const now = new Date().toLocaleString('ru-RU');
             document.querySelector('.header p').innerHTML += `<br><small>Обновлено: ${now}</small>`;
         });
+        
+        // Функции управления системой
+        function systemAction(action) {
+            const messages = {
+                'shutdown': 'Вы уверены, что хотите выключить Raspberry Pi?\n\nСистема будет выключена через 1 минуту.',
+                'reboot': 'Вы уверены, что хотите перезагрузить Raspberry Pi?\n\nСистема будет перезагружена через 1 минуту.',
+                'umount_hdd': 'Отключить внешний жесткий диск?\n\nВсе данные будут синхронизированы.'
+            };
+            
+            if (!confirm(messages[action])) {
+                return;
+            }
+            
+            const button = event.target;
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = '⏳ Выполняется...';
+            
+            fetch('/system/shutdown', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `action=${action}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    alert('✅ ' + data.message);
+                    if (action === 'shutdown' || action === 'reboot') {
+                        // Показываем обратный отсчет
+                        showCountdown(action === 'shutdown' ? 'выключения' : 'перезагрузки');
+                    }
+                } else {
+                    alert('❌ Ошибка: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('❌ Ошибка выполнения команды');
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.textContent = originalText;
+            });
+        }
+        
+        function cancelShutdown() {
+            if (!confirm('Отменить запланированное выключение/перезагрузку?')) {
+                return;
+            }
+            
+            const button = event.target;
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = '⏳ Отменяем...';
+            
+            fetch('/system/cancel-shutdown', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.status === 'ok' ? '✅ ' + data.message : '❌ ' + data.message);
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('❌ Ошибка отмены');
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.textContent = originalText;
+            });
+        }
+        
+        function showCountdown(action) {
+            const countdownDiv = document.createElement('div');
+            countdownDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: linear-gradient(135deg, #f56565, #e53e3e);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                z-index: 9999;
+                font-weight: bold;
+                text-align: center;
+                min-width: 250px;
+            `;
+            
+            document.body.appendChild(countdownDiv);
+            
+            let seconds = 60;
+            const interval = setInterval(() => {
+                const minutes = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                countdownDiv.innerHTML = `
+                    <div style="font-size: 1.2em; margin-bottom: 10px;">
+                        ⏰ ${action.charAt(0).toUpperCase() + action.slice(1)} через:
+                    </div>
+                    <div style="font-size: 2em; color: #fff3cd;">
+                        ${minutes}:${secs.toString().padStart(2, '0')}
+                    </div>
+                    <div style="margin-top: 10px; font-size: 0.9em;">
+                        <button onclick="cancelShutdown()" style="
+                            background: rgba(255,255,255,0.2);
+                            border: 1px solid rgba(255,255,255,0.3);
+                            color: white;
+                            padding: 5px 15px;
+                            border-radius: 5px;
+                            cursor: pointer;
+                        ">Отменить</button>
+                    </div>
+                `;
+                
+                seconds--;
+                if (seconds < 0) {
+                    clearInterval(interval);
+                    countdownDiv.remove();
+                }
+            }, 1000);
+        }
     </script>
 </body>
 </html>

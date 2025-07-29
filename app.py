@@ -724,6 +724,82 @@ def monitor_page():
     
     return render_template('monitor.html', **monitor_data)
 
+@app.route("/api/monitor")
+def api_monitor():
+    """API для получения данных мониторинга в JSON формате"""
+    import subprocess
+    import glob
+    import os
+    
+    # Получаем текущие параметры системы (повторяем логику из monitor_page)
+    try:
+        # Температура CPU
+        temp_result = subprocess.run(['cat', '/sys/class/thermal/thermal_zone0/temp'], capture_output=True, text=True)
+        temp_celsius = float(temp_result.stdout.strip()) / 1000 if temp_result.returncode == 0 else 0
+        
+        # Использование диска
+        disk_result = subprocess.run(['df', '-h', '/'], capture_output=True, text=True)
+        disk_usage = "Неизвестно"
+        if disk_result.returncode == 0:
+            lines = disk_result.stdout.strip().split('\n')
+            if len(lines) > 1:
+                disk_usage = lines[1].split()[4]  # Процент использования
+        
+        # Использование память
+        mem_result = subprocess.run(['free', '-m'], capture_output=True, text=True)
+        memory_usage = "Неизвестно"
+        if mem_result.returncode == 0:
+            lines = mem_result.stdout.strip().split('\n')
+            if len(lines) > 1:
+                mem_data = lines[1].split()
+                total_mem = int(mem_data[1])
+                used_mem = int(mem_data[2])
+                memory_usage = f"{round(used_mem/total_mem*100, 1)}%"
+        
+        # Статус сервиса
+        service_status = "Работает (ручной запуск)"
+        try:
+            service_result = subprocess.run(['systemctl', 'is-active', 'aether-player.service'], 
+                                          capture_output=True, text=True)
+            if service_result.returncode == 0 and service_result.stdout.strip() == 'active':
+                service_status = "Работает (systemd)"
+            else:
+                service_status = "Остановлен"
+        except:
+            pass  # Сервис не настроен
+            
+    except Exception as e:
+        logger.error(f"Ошибка получения данных мониторинга: {e}")
+        temp_celsius = 0
+        disk_usage = "Ошибка"
+        memory_usage = "Ошибка"
+        service_status = "Ошибка"
+    
+    # Получаем последние отчеты
+    reports = []
+    try:
+        report_files = glob.glob('/tmp/aether-monitor-*.txt')
+        report_files.sort(key=os.path.getmtime, reverse=True)
+        for report_file in report_files[:5]:  # Последние 5 отчетов
+            mtime = os.path.getmtime(report_file)
+            reports.append({
+                'file': os.path.basename(report_file),
+                'time': subprocess.run(['date', '-d', f'@{mtime}', '+%d.%m.%Y %H:%M'], 
+                                     capture_output=True, text=True).stdout.strip()
+            })
+    except Exception as e:
+        logger.error(f"Ошибка получения отчетов: {e}")
+    
+    monitor_data = {
+        'temperature': temp_celsius,
+        'disk_usage': disk_usage,
+        'memory_usage': memory_usage,
+        'service_status': service_status,
+        'reports': reports
+    }
+    
+    return jsonify(monitor_data)
+
 @app.route("/monitor/report/<filename>")
 def view_report(filename):
     """Просмотр конкретного отчета"""
@@ -743,6 +819,56 @@ def view_report(filename):
         return f"<pre style='font-family: monospace; background: #f5f5f5; padding: 20px;'>{content}</pre>"
     except Exception as e:
         return f"Ошибка чтения отчета: {e}", 500
+
+@app.route("/system/shutdown", methods=['POST'])
+def system_shutdown():
+    """Безопасное отключение Raspberry Pi"""
+    action = request.form.get('action', 'shutdown')
+    
+    if action == 'shutdown':
+        logger.info("Запрос безопасного отключения системы")
+        # Останавливаем плеер
+        stop_mpv_internal()
+        # Синхронизируем файловую систему
+        isolated_run(['sync'], check=False)
+        # Размонтируем внешний диск
+        isolated_run(['sudo', 'umount', '/mnt/hdd'], check=False)
+        # Запускаем отключение через 1 минуту
+        isolated_run(['sudo', 'shutdown', '-h', '+1'], check=False)
+        return jsonify({'status': 'ok', 'message': 'Система будет отключена через 1 минуту'})
+    
+    elif action == 'reboot':
+        logger.info("Запрос перезагрузки системы")
+        # Останавливаем плеер
+        stop_mpv_internal()
+        # Синхронизируем файловую систему
+        isolated_run(['sync'], check=False)
+        # Запускаем перезагрузку через 30 секунд
+        isolated_run(['sudo', 'shutdown', '-r', '+1'], check=False)
+        return jsonify({'status': 'ok', 'message': 'Система будет перезагружена через 1 минуту'})
+    
+    elif action == 'umount_hdd':
+        logger.info("Размонтирование внешнего диска")
+        # Останавливаем плеер
+        stop_mpv_internal()
+        # Синхронизируем данные
+        isolated_run(['sync'], check=False)
+        # Размонтируем диск
+        result = isolated_run(['sudo', 'umount', '/mnt/hdd'], check=False)
+        if result.get('returncode') == 0:
+            return jsonify({'status': 'ok', 'message': 'Внешний диск безопасно отключен'})
+        else:
+            return jsonify({'status': 'error', 'message': 'Ошибка отключения диска'})
+    
+    else:
+        return jsonify({'status': 'error', 'message': 'Неизвестное действие'}), 400
+
+@app.route("/system/cancel-shutdown", methods=['POST'])
+def cancel_shutdown():
+    """Отмена запланированного отключения"""
+    logger.info("Отмена запланированного отключения")
+    isolated_run(['sudo', 'shutdown', '-c'], check=False)
+    return jsonify({'status': 'ok', 'message': 'Отключение отменено'})
 
 # WebSocket обработчики
 if socketio:
