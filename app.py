@@ -647,27 +647,7 @@ def create_folder():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-# WebSocket обработчики
-if socketio:
-    @socketio.on('connect')
-    def handle_connect():
-        logger.info('Клиент подключился')
-        emit_status_update()
-
-# Запуск сервера
-if __name__ == "__main__":
-    logger.info("Запуск Aether Player (простая архитектура)")
-    
-    # Восстанавливаем ALSA
-    try:
-        isolated_run(["sudo", "alsactl", "restore"], check=True)
-        logger.info("ALSA восстановлено")
-    except Exception as e:
-        logger.error(f"Ошибка восстановления ALSA: {e}")
-    
-    # Запускаем MPV
-    ensure_mpv_is_running()
-    
+# Маршрут мониторинга
 @app.route("/monitor")
 def monitor_page():
     """Страница мониторинга системы"""
@@ -764,6 +744,27 @@ def view_report(filename):
     except Exception as e:
         return f"Ошибка чтения отчета: {e}", 500
 
+# WebSocket обработчики
+if socketio:
+    @socketio.on('connect')
+    def handle_connect():
+        logger.info('Клиент подключился')
+        emit_status_update()
+
+# Запуск сервера
+if __name__ == "__main__":
+    logger.info("Запуск Aether Player (простая архитектура)")
+    
+    # Восстанавливаем ALSA
+    try:
+        isolated_run(["sudo", "alsactl", "restore"], check=True)
+        logger.info("ALSA восстановлено")
+    except Exception as e:
+        logger.error(f"Ошибка восстановления ALSA: {e}")
+    
+    # Запускаем MPV
+    ensure_mpv_is_running()
+    
     # Фоновая задача отключена - используем HTTP-механизм обновления
     # socketio.start_background_task(target=status_update_task)
     
