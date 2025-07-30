@@ -113,7 +113,26 @@ else:
 
 MEDIA_ROOT = "/mnt/hdd"
 MPV_SOCKET = "/tmp/mpvsocket"
-MEDIA_EXTENSIONS = ['.flac', '.wav', '.wv', '.dsf', '.dff', '.mp3', '.mkv', '.mp4', '.avi']
+MEDIA_EXTENSIONS = ['.flac', '.wav', '.wv', '.dsf', '.dff', '.mp3', '.aac', '.ogg', '.m4a', 
+                   '.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', 
+                   '.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff']
+
+def get_file_type(filepath):
+    """Определяет тип медиафайла"""
+    ext = os.path.splitext(filepath)[1].lower()
+    
+    audio_extensions = ['.flac', '.wav', '.wv', '.mp3', '.aac', '.ogg', '.m4a']
+    video_extensions = ['.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm']
+    image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff']
+    
+    if ext in audio_extensions:
+        return 'audio'
+    elif ext in video_extensions:
+        return 'video'
+    elif ext in image_extensions:
+        return 'image'
+    else:
+        return 'unknown'
 
 def get_best_audio_device():
     """Автоматически определяет лучшее доступное аудио устройство"""
@@ -244,18 +263,23 @@ def ensure_mpv_is_running():
         except:
             pass
         
-        # Запускаем MPV с оптимальными настройками аудио
+        # Запускаем MPV с оптимальными настройками аудио и видео
         audio_device = get_best_audio_device()
         command = [
             "mpv", 
             "--idle", 
             f"--input-ipc-server={MPV_SOCKET}", 
-            "--fs", 
-            "--no-video",
+            "--fs",                            # Полноэкранный режим
+            "--geometry=100%:100%",            # Растянуть на весь экран
+            "--osd-level=1",                   # Минимальный OSD
+            "--really-quiet",                  # Убираем лишние сообщения
             f"--audio-device={audio_device}",  # Автоматически определенное устройство
             "--volume=80",                     # Начальная громкость 80%
             "--audio-channels=stereo",         # Стерео режим
-            "--audio-samplerate=48000"         # Высокое качество звука
+            "--audio-samplerate=48000",        # Высокое качество звука
+            "--hwdec=auto-safe",               # Безопасное аппаратное декодирование
+            "--vo=gpu,drm,fbdev",              # Варианты видео вывода (по приоритету)
+            "--profile=sw-fast"                # Профиль для программного декодирования
         ]
         from subprocess import DEVNULL
         mpv_pid = isolated_popen(command, stdout=DEVNULL, stderr=DEVNULL)
@@ -439,19 +463,35 @@ def play():
     file_subpath = request.form.get('filepath')
     logger.info(f"Запрос воспроизведения: {file_subpath}")
     
+    full_path = os.path.join(MEDIA_ROOT, file_subpath)
+    file_type = get_file_type(full_path)
+    
+    # Для изображений используем fbi
+    if file_type == 'image':
+        logger.info(f"Отображение изображения: {file_subpath}")
+        isolated_run(["sudo", "killall", "fbi"], check=False)
+        command = ["sudo", "fbi", "-T", "1", "-a", "--noverbose", full_path]
+        from subprocess import DEVNULL
+        isolated_popen(command, stdout=DEVNULL, stderr=DEVNULL)
+        return jsonify({'status': 'ok', 'message': 'Изображение отображено'})
+    
+    # Для аудио и видео используем MPV
+    if file_type not in ['audio', 'video']:
+        return jsonify({'status': 'error', 'message': 'Неподдерживаемый тип файла'})
+    
     # Подготавливаем MPV
     ensure_mpv_is_running()
-    isolated_run(["sudo", "killall", "fbi"], check=False)
+    isolated_run(["sudo", "killall", "fbi"], check=False)  # Закрываем изображения
     
-    full_path = os.path.join(MEDIA_ROOT, file_subpath)
-    
-    # Формируем плейлист
+    # Формируем плейлист только из аудио/видео файлов
     current_dir = os.path.dirname(full_path)
-    playlist = sorted([
-        os.path.join(current_dir, f) 
-        for f in os.listdir(current_dir) 
-        if os.path.splitext(f)[1].lower() in MEDIA_EXTENSIONS
-    ])
+    all_files = os.listdir(current_dir)
+    playlist = []
+    
+    for f in sorted(all_files):
+        file_path = os.path.join(current_dir, f)
+        if get_file_type(file_path) in ['audio', 'video']:
+            playlist.append(file_path)
     
     try:
         playlist_index = playlist.index(full_path)
@@ -464,6 +504,14 @@ def play():
     if mpv_result.get("status") == "error":
         logger.error(f"Ошибка загрузки файла: {mpv_result}")
         return jsonify({'status': 'error', 'message': 'Ошибка загрузки файла'})
+    
+    # Дополнительные настройки для видео
+    if file_type == 'video':
+        logger.info(f"Воспроизведение видео: {os.path.basename(full_path)}")
+        # Включаем полноэкранный режим для видео
+        mpv_command({"command": ["set_property", "fullscreen", True]})
+    else:
+        logger.info(f"Воспроизведение аудио: {os.path.basename(full_path)}")
     
     # СИНХРОНИЗАЦИЯ С MPV - получаем duration и volume
     time.sleep(0.5)
