@@ -734,6 +734,21 @@ def create_folder():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+def get_power_status():
+    """Получает статус управления питанием периферии"""
+    try:
+        # Проверяем состояние GPIO пина управления питанием
+        gpio_path = "/sys/class/gpio/gpio18/value"
+        if os.path.exists(gpio_path):
+            with open(gpio_path, 'r') as f:
+                state = f.read().strip()
+            return "Включено" if state == "1" else "Выключено"
+        else:
+            return "Не настроено"
+    except Exception as e:
+        logger.error(f"Ошибка получения статуса питания: {e}")
+        return "Ошибка"
+
 # Маршрут мониторинга
 @app.route("/monitor")
 def monitor_page():
@@ -877,11 +892,15 @@ def api_monitor():
     except Exception as e:
         logger.error(f"Ошибка получения отчетов: {e}")
     
+    # Получаем статус питания периферии
+    power_status = get_power_status()
+    
     monitor_data = {
         'temperature': temp_celsius,
         'disk_usage': disk_usage,
         'memory_usage': memory_usage,
         'service_status': service_status,
+        'power_status': power_status,
         'reports': reports
     }
     
@@ -946,6 +965,34 @@ def system_shutdown():
             return jsonify({'status': 'ok', 'message': 'Внешний диск безопасно отключен'})
         else:
             return jsonify({'status': 'error', 'message': 'Ошибка отключения диска'})
+    
+    else:
+        return jsonify({'status': 'error', 'message': 'Неизвестное действие'}), 400
+
+@app.route("/system/power", methods=['POST'])
+def system_power():
+    """Управление питанием периферии"""
+    action = request.form.get('action', '')
+    
+    if action == 'on':
+        logger.info("Включение питания периферии")
+        result = isolated_run(['/home/eu/aether-player/power-control.sh', 'on'], check=False)
+        if result.get('returncode') == 0:
+            return jsonify({'status': 'ok', 'message': 'Питание периферии включено'})
+        else:
+            return jsonify({'status': 'error', 'message': 'Ошибка включения питания'})
+    
+    elif action == 'off':
+        logger.info("Выключение питания периферии")
+        result = isolated_run(['/home/eu/aether-player/power-control.sh', 'safe-off'], check=False)
+        if result.get('returncode') == 0:
+            return jsonify({'status': 'ok', 'message': 'Питание периферии безопасно выключено'})
+        else:
+            return jsonify({'status': 'error', 'message': 'Ошибка выключения питания'})
+    
+    elif action == 'status':
+        power_status = get_power_status()
+        return jsonify({'status': 'ok', 'power_status': power_status})
     
     else:
         return jsonify({'status': 'error', 'message': 'Неизвестное действие'}), 400
