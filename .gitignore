@@ -60,3 +60,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Power management status files
+aether-power-status.json
+aether-power-gpio.pid
