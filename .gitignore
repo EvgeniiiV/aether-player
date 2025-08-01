@@ -64,3 +64,8 @@ Thumbs.db
 # Power management status files
 aether-power-status.json
 aether-power-gpio.pid
+
+# System temporary files (GPIO, pipes, etc.)
+.lgd-*
+*.fifo
+*.pipe
