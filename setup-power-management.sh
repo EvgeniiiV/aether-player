@@ -19,8 +19,8 @@ Type=oneshot
 RemainAfterExit=yes
 User=root
 WorkingDirectory=/home/eu/aether-player
-ExecStart=/home/eu/aether-player/power-control.sh on
-ExecStop=/home/eu/aether-player/power-control.sh safe-off
+ExecStart=/usr/bin/python3 /home/eu/aether-player/power-control.py on
+ExecStop=/usr/bin/python3 /home/eu/aether-player/power-control.py safe-off
 TimeoutStopSec=30
 
 [Install]
@@ -36,7 +36,7 @@ cat << 'EOF' | sudo tee /home/eu/aether-player/startup-with-power.sh > /dev/null
 echo "🚀 Запуск Aether Player с управлением питанием..."
 
 # 1. Включаем питание периферии
-/home/eu/aether-player/power-control.sh on
+/usr/bin/python3 /home/eu/aether-player/power-control.py on
 
 # 2. Ждем стабилизации питания
 sleep 3

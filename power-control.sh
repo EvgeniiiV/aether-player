@@ -4,13 +4,56 @@
 # Простое управление GPIO для реле 220В
 
 # Конфигурация
-POWER_GPIO=21          # GPIO пин для управления реле
+POWER_GPIO=26          # GPIO пин для управления реле (тестируем 26 вместо 21)
 GPIO_CHIP="gpiochip0"
 PIDFILE="/tmp/aether-power-gpio.pid"
+SYSFS_GPIO_PATH="/sys/class/gpio/gpio$POWER_GPIO"
+
+# Функция экспорта GPIO через sysfs (резервный метод)
+export_gpio_sysfs() {
+    if [ ! -d "$SYSFS_GPIO_PATH" ]; then
+        echo "$POWER_GPIO" | sudo tee /sys/class/gpio/export > /dev/null 2>&1
+        sleep 0.5
+    fi
+    
+    if [ -d "$SYSFS_GPIO_PATH" ]; then
+        echo "out" | sudo tee "$SYSFS_GPIO_PATH/direction" > /dev/null 2>&1
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Функция установки GPIO через sysfs
+set_gpio_sysfs() {
+    local value=$1
+    if [ -f "$SYSFS_GPIO_PATH/value" ]; then
+        echo "$value" | sudo tee "$SYSFS_GPIO_PATH/value" > /dev/null 2>&1
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Функция чтения GPIO через sysfs
+get_gpio_sysfs() {
+    if [ -f "$SYSFS_GPIO_PATH/value" ]; then
+        cat "$SYSFS_GPIO_PATH/value" 2>/dev/null
+    else
+        echo "error"
+    fi
+}
 
 # Функция проверки состояния GPIO
 check_gpio() {
-    timeout 1 gpioget $GPIO_CHIP $POWER_GPIO 2>/dev/null
+    # Сначала пробуем libgpiod
+    local state=$(timeout 1 gpioget $GPIO_CHIP $POWER_GPIO 2>/dev/null)
+    if [ ! -z "$state" ]; then
+        echo "$state"
+    else
+        # Резервный метод через sysfs
+        get_gpio_sysfs
+    fi
 }
 
 # Функция проверки активного процесса
@@ -47,29 +90,51 @@ power_on() {
     # Останавливаем предыдущий процесс
     stop_gpio_process
     
-    # Простой способ - устанавливаем HIGH в фоне
-    echo "Запуск удержания GPIO $POWER_GPIO в HIGH..."
-    (
-        while true; do
-            gpioset $GPIO_CHIP $POWER_GPIO=1 2>/dev/null
-            sleep 0.1
-        done
-    ) &
+    echo "Метод 1: Попытка через sysfs..."
+    if export_gpio_sysfs; then
+        if set_gpio_sysfs 1; then
+            sleep 1
+            STATE=$(get_gpio_sysfs)
+            if [ "$STATE" = "1" ]; then
+                echo "УСПЕХ (sysfs): Питание включено"
+                echo "GPIO $POWER_GPIO = HIGH"
+                logger "Aether Player: Питание включено через sysfs (GPIO $POWER_GPIO)"
+                return 0
+            fi
+        fi
+    fi
     
+    echo "Метод 2: Попытка через libgpiod с фоновым процессом..."
+    # Создаем простой скрипт удержания в background
+    cat > /tmp/gpio_hold.sh << EOF
+#!/bin/bash
+while true; do
+    gpioset $GPIO_CHIP $POWER_GPIO=1 2>/dev/null && sleep 0.05
+done
+EOF
+    chmod +x /tmp/gpio_hold.sh
+    
+    # Запускаем в фоне
+    nohup /tmp/gpio_hold.sh > /dev/null 2>&1 &
     GPIO_PID=$!
     echo "$GPIO_PID" > "$PIDFILE"
-    sleep 1
+    
+    # Даем время процессу запуститься
+    sleep 2
     
     # Проверяем результат
     STATE=$(check_gpio)
     if [ "$STATE" = "1" ]; then
-        echo "УСПЕХ: Питание включено"
+        echo "УСПЕХ (libgpiod): Питание включено"
         echo "GPIO $POWER_GPIO = HIGH"
         echo "Процесс PID: $GPIO_PID"
         logger "Aether Player: Питание включено (GPIO $POWER_GPIO, PID: $GPIO_PID)"
+        return 0
     else
-        echo "ОШИБКА: GPIO $POWER_GPIO = $STATE"
+        echo "ОШИБКА: Не удалось включить питание ни одним методом"
+        echo "Финальное состояние GPIO: '$STATE'"
         stop_gpio_process
+        rm -f /tmp/gpio_hold.sh
         return 1
     fi
 }
@@ -204,6 +269,52 @@ test_relay() {
     echo "Реле должно быть подключено к GPIO $POWER_GPIO (pin 40)"
 }
 
+# Функция диагностики GPIO
+diagnose() {
+    echo "=== ДИАГНОСТИКА GPIO ==="
+    echo ""
+    
+    echo "1. Проверка доступности GPIO устройств:"
+    ls -la /dev/gpiochip* 2>/dev/null || echo "GPIO устройства не найдены"
+    echo ""
+    
+    echo "2. Проверка прав пользователя:"
+    groups | grep -q gpio && echo "Пользователь в группе gpio: ДА" || echo "Пользователь в группе gpio: НЕТ"
+    echo ""
+    
+    echo "3. Информация о GPIO $POWER_GPIO:"
+    gpioinfo | grep "line.*$POWER_GPIO:" || echo "GPIO $POWER_GPIO не найден"
+    echo ""
+    
+    echo "4. Тест чтения GPIO $POWER_GPIO:"
+    if STATE=$(gpioget $GPIO_CHIP $POWER_GPIO 2>&1); then
+        echo "Текущее состояние: $STATE"
+    else
+        echo "ОШИБКА чтения: $STATE"
+    fi
+    echo ""
+    
+    echo "5. Тест записи GPIO $POWER_GPIO (кратковременно):"
+    if gpioset $GPIO_CHIP $POWER_GPIO=1 2>&1; then
+        echo "Запись прошла успешно"
+        sleep 0.5
+        NEW_STATE=$(gpioget $GPIO_CHIP $POWER_GPIO 2>/dev/null)
+        echo "Состояние после записи: $NEW_STATE"
+    else
+        echo "ОШИБКА записи"
+    fi
+    echo ""
+    
+    echo "6. Проверка активных процессов GPIO:"
+    if is_gpio_active; then
+        PID=$(cat "$PIDFILE")
+        echo "Активный процесс: PID $PID"
+        ps -p "$PID" || echo "Процесс не найден"
+    else
+        echo "Активных процессов нет"
+    fi
+}
+
 # Функция очистки
 cleanup() {
     echo "Очистка процессов..."
@@ -232,6 +343,9 @@ case "$1" in
     "cleanup"|"clean")
         cleanup
         ;;
+    "diagnose"|"diag")
+        diagnose
+        ;;
     *)
         echo "Система управления питанием Aether Player v5.0"
         echo ""
@@ -244,8 +358,10 @@ case "$1" in
         echo "  status       - Показать состояние"
         echo "  test         - Протестировать реле"
         echo "  cleanup      - Очистить процессы"
+        echo "  diagnose     - Диагностика GPIO проблем"
         echo ""
         echo "Примеры:"
+        echo "  $0 diagnose # Проверить GPIO систему"
         echo "  $0 on       # Включить"
         echo "  $0 status   # Проверить"
         echo "  $0 test     # Тестировать"

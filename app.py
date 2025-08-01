@@ -737,14 +737,18 @@ def create_folder():
 def get_power_status():
     """Получает статус управления питанием периферии"""
     try:
-        # Проверяем состояние GPIO пина управления питанием
-        gpio_path = "/sys/class/gpio/gpio18/value"
-        if os.path.exists(gpio_path):
-            with open(gpio_path, 'r') as f:
-                state = f.read().strip()
-            return "Включено" if state == "1" else "Выключено"
+        # Используем Python скрипт для получения статуса
+        result = isolated_run(['python3', '/home/eu/aether-player/power-control.py', 'status'], check=False)
+        
+        if result.get('returncode') == 0:
+            output = result.get('stdout', '')
+            # Парсим вывод для определения состояния
+            if "ВКЛЮЧЕНО" in output or "HIGH" in output:
+                return "Включено"
+            else:
+                return "Выключено"
         else:
-            return "Не настроено"
+            return "Ошибка проверки"
     except Exception as e:
         logger.error(f"Ошибка получения статуса питания: {e}")
         return "Ошибка"
@@ -976,7 +980,7 @@ def system_power():
     
     if action == 'on':
         logger.info("Включение питания периферии")
-        result = isolated_run(['/home/eu/aether-player/power-control.sh', 'on'], check=False)
+        result = isolated_run(['python3', '/home/eu/aether-player/power-control.py', 'on'], check=False)
         if result.get('returncode') == 0:
             return jsonify({'status': 'ok', 'message': 'Питание периферии включено'})
         else:
@@ -984,7 +988,7 @@ def system_power():
     
     elif action == 'off':
         logger.info("Выключение питания периферии")
-        result = isolated_run(['/home/eu/aether-player/power-control.sh', 'safe-off'], check=False)
+        result = isolated_run(['python3', '/home/eu/aether-player/power-control.py', 'safe-off'], check=False)
         if result.get('returncode') == 0:
             return jsonify({'status': 'ok', 'message': 'Питание периферии безопасно выключено'})
         else:
