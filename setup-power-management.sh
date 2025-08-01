@@ -51,7 +51,7 @@ echo "✅ Система полностью запущена!"
 EOF
 
 sudo chmod +x /home/eu/aether-player/startup-with-power.sh
-sudo chmod +x /home/eu/aether-player/power-control.sh
+sudo chmod +x /home/eu/aether-player/power-control.py
 
 # Перезагружаем systemd
 sudo systemctl daemon-reload
@@ -68,9 +68,9 @@ echo "  sudo systemctl stop aether-power     - Остановить и безо�
 echo "  sudo systemctl status aether-power   - Статус сервиса"
 echo ""
 echo "🎛️ Ручное управление:"
-echo "  ./power-control.sh on               - Включить питание"
-echo "  ./power-control.sh safe-off         - Безопасно выключить"
-echo "  ./power-control.sh status           - Проверить состояние"
+echo "  sudo python3 power-control.py on     - Включить питание"
+echo "  sudo python3 power-control.py safe-off - Безопасно выключить"
+echo "  sudo python3 power-control.py status - Проверить состояние"
 echo ""
 echo "⚠️ ВАЖНО: Подключите реле к GPIO 18 (pin 12) RPi"
 echo "   GPIO 18 → Оптопара → Реле 220В → Розетки периферии"

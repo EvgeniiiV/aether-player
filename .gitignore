@@ -69,3 +69,6 @@ aether-power-gpio.pid
 .lgd-*
 *.fifo
 *.pipe
+
+# Backup files
+*.backup
