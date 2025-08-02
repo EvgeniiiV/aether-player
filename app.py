@@ -272,7 +272,7 @@ def ensure_mpv_is_running():
             "--fs",                            # Полноэкранный режим
             "--geometry=100%:100%",            # Растянуть на весь экран
             "--osd-level=1",                   # Минимальный OSD
-            # f"--audio-device={audio_device}",  # УБРАНО - вызывает проблемы
+            f"--audio-device={audio_device}",  # КРИТИЧНО! НЕ КОММЕНТИРОВАТЬ! Нужно для Scarlett 2i2
             "--volume=100",                    # Максимальная громкость
             "--audio-channels=stereo",         # Стерео режим
             "--audio-samplerate=0",            # Не ресемплируем - важно для DSD!
