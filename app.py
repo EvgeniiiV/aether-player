@@ -112,7 +112,7 @@ else:
     socketio = None
 
 MEDIA_ROOT = "/mnt/hdd"
-MPV_SOCKET = "/tmp/mpvsocket"
+MPV_SOCKET = "/tmp/mpv_socket"
 MEDIA_EXTENSIONS = ['.flac', '.wav', '.wv', '.dsf', '.dff', '.mp3', '.aac', '.ogg', '.m4a', 
                    '.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', 
                    '.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff']
@@ -121,7 +121,7 @@ def get_file_type(filepath):
     """Определяет тип медиафайла"""
     ext = os.path.splitext(filepath)[1].lower()
     
-    audio_extensions = ['.flac', '.wav', '.wv', '.mp3', '.aac', '.ogg', '.m4a']
+    audio_extensions = ['.flac', '.wav', '.wv', '.dsf', '.dff', '.mp3', '.aac', '.ogg', '.m4a']
     video_extensions = ['.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm']
     image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff']
     
@@ -272,48 +272,38 @@ def ensure_mpv_is_running():
             "--fs",                            # Полноэкранный режим
             "--geometry=100%:100%",            # Растянуть на весь экран
             "--osd-level=1",                   # Минимальный OSD
-            "--really-quiet",                  # Убираем лишние сообщения
-            f"--audio-device={audio_device}",  # Автоматически определенное устройство
-            "--volume=80",                     # Начальная громкость 80%
+            # f"--audio-device={audio_device}",  # УБРАНО - вызывает проблемы
+            "--volume=100",                    # Максимальная громкость
             "--audio-channels=stereo",         # Стерео режим
-            "--audio-samplerate=48000",        # Высокое качество звука
+            "--audio-samplerate=0",            # Не ресемплируем - важно для DSD!
+            # "--audio-format=auto",           # УБРАНО - неверный параметр
+            "--ad=+dsd_lsbf,+dsd_msbf,+dsd_lsbf_planar,+dsd_msbf_planar",  # Явно включаем DSD декодеры
             "--hwdec=auto-safe",               # Безопасное аппаратное декодирование
             "--vo=gpu,drm,fbdev",              # Варианты видео вывода (по приоритету)
             "--profile=sw-fast"                # Профиль для программного декодирования
         ]
-        from subprocess import DEVNULL
-        mpv_pid = isolated_popen(command, stdout=DEVNULL, stderr=DEVNULL)
         
-        # Создаем обёртку процесса
-        class DummyProcess:
-            def __init__(self, pid):
-                self.pid = pid
+        # Простой запуск MPV без изоляции - исправление проблемы запуска
+        try:
+            import subprocess
+            player_process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            logger.info(f"MPV запущен с PID {player_process.pid}")
             
-            def poll(self):
-                try:
-                    os.kill(self.pid, 0)
-                    return None
-                except ProcessLookupError:
-                    return 1
-                except:
-                    return 1
+            # Ждем создания сокета
+            for i in range(50):  # максимум 5 секунд
+                if os.path.exists(MPV_SOCKET):
+                    break
+                time.sleep(0.1)
             
-            def kill(self):
-                try:
-                    os.kill(self.pid, 9)  # SIGKILL
-                except:
-                    pass
+            if not os.path.exists(MPV_SOCKET):
+                logger.error("MPV запущен, но сокет не создан")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Ошибка запуска MPV: {e}")
+            return False
         
-        player_process = DummyProcess(mpv_pid)
-        
-        # Ждём создания сокета
-        for _ in range(15):  # 3 секунды
-            if os.path.exists(MPV_SOCKET):
-                break
-            time.sleep(0.2)
-        
-        time.sleep(0.5)
-        logger.info("MPV запущен")
+    return True
 
 def stop_mpv_internal():
     """Останавливает MPV процесс"""
@@ -1035,6 +1025,6 @@ if __name__ == "__main__":
     # Запускаем сервер
     logger.info("Запуск веб-сервера на порту 5000")
     if socketio:
-        socketio.run(app, host='0.0.0.0', port=5000, debug=False)
+        socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
     else:
         app.run(host='0.0.0.0', port=5000, debug=False)
