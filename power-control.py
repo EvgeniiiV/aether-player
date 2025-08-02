@@ -27,6 +27,12 @@ class PowerControl:
     def init_gpio(self):
         """Инициализация GPIO"""
         try:
+            # Очистка от предыдущих сессий
+            try:
+                GPIO.cleanup()
+            except:
+                pass
+            
             # Устанавливаем режим BCM (Broadcom SOC channel)
             GPIO.setmode(GPIO.BCM)
             
@@ -279,6 +285,9 @@ class PowerControl:
         """Очистка GPIO при завершении"""
         try:
             if self.is_initialized:
+                # Сначала устанавливаем LOW для безопасности
+                GPIO.output(self.gpio_pin, GPIO.LOW)
+                time.sleep(0.1)
                 GPIO.cleanup()
                 print("GPIO очищен")
                 
@@ -286,6 +295,15 @@ class PowerControl:
             for filepath in [PIDFILE, STATUSFILE]:
                 if os.path.exists(filepath):
                     os.remove(filepath)
+            
+            # Удаляем проблемный lgpio файл если он есть
+            lgd_file = "/home/eu/aether-player/.lgd-nfy0"
+            if os.path.exists(lgd_file):
+                try:
+                    os.remove(lgd_file)
+                    print("Файл .lgd-nfy0 удален")
+                except:
+                    pass
                     
         except Exception as e:
             print(f"Ошибка очистки: {e}")
@@ -352,10 +370,7 @@ def main():
     try:
         if command in ['on', 'start', 'enable']:
             success = power_control.power_on()
-            if success:
-                # Запускаем демон для удержания состояния
-                print("Запуск в режиме демона для удержания состояния...")
-                daemon_mode()
+            # НЕ запускаем демон - GPIO держит состояние сам по себе
             sys.exit(0 if success else 1)
             
         elif command in ['off', 'stop', 'disable']:
