@@ -272,7 +272,7 @@ def ensure_mpv_is_running():
             "--fs",                            # Полноэкранный режим
             "--geometry=100%:100%",            # Растянуть на весь экран
             "--osd-level=1",                   # Минимальный OSD
-            f"--audio-device={audio_device}",  # Указываем аудио устройство
+            # f"--audio-device={audio_device}",  # УБРАНО - вызывает проблемы
             "--volume=100",                    # Максимальная громкость
             "--audio-channels=stereo",         # Стерео режим
             "--audio-samplerate=0",            # Не ресемплируем - важно для DSD!
