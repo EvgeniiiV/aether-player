@@ -14,7 +14,10 @@ if [ -d ".venv" ]; then
     source .venv/bin/activate
 fi
 
-# Запускаем сервер
+# Запускаем сервер с восстановлением ALSA
+echo "$(date): Восстановление ALSA" >> /home/eu/aether-player/autostart.log
+sudo alsactl restore >> /home/eu/aether-player/autostart.log 2>&1
+
 echo "$(date): Запуск Aether Player" >> /home/eu/aether-player/autostart.log
 python3 app.py >> /home/eu/aether-player/autostart.log 2>&1 &
 

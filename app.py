@@ -139,23 +139,54 @@ def get_best_audio_device():
     try:
         # Проверяем доступные аудио карты
         with open('/proc/asound/cards', 'r') as f:
-            cards = f.read()
+            cards_content = f.read()
         
-        # Приоритет устройств (от лучшего к худшему)
+        logger.debug(f"Доступные ALSA карты:\n{cards_content}")
+        
+        # Парсим карты для динамического определения номеров
+        import re
+        card_lines = cards_content.strip().split('\n')
+        detected_cards = {}
+        
+        for line in card_lines:
+            # Формат: " 0 [Headphones     ]: bcm2835_headpho - bcm2835 Headphones"
+            match = re.match(r'\s*(\d+)\s+\[([^\]]+)\]\s*:\s*(.+)', line)
+            if match:
+                card_num = int(match.group(1))
+                card_name = match.group(2).strip()
+                card_desc = match.group(3).strip()
+                detected_cards[card_num] = {'name': card_name, 'desc': card_desc}
+        
+        logger.debug(f"Обнаружены карты: {detected_cards}")
+        
+        # Приоритет устройств (от лучшего к худшему) - теперь ищем динамически
         audio_priorities = [
-            ('Scarlett', 'alsa/hw:1,0'),  # Focusrite Scarlett 2i2
-            ('USB', 'alsa/hw:1,0'),       # Любое USB аудио
-            ('vc4hdmi0', 'alsa/hw:2,0'),  # HDMI выход 1
-            ('Headphones', 'alsa/hw:0,0') # Встроенный 3.5mm
+            ('Scarlett', 'Focusrite'),     # Focusrite Scarlett (любой номер)
+            ('USB', 'USB'),                # Любое USB аудио
+            ('vc4hdmi0', 'vc4-hdmi'),      # HDMI выход 1
+            ('Headphones', 'Headphones')   # Встроенный 3.5mm
         ]
         
-        for device_name, alsa_device in audio_priorities:
-            if device_name in cards:
-                logger.info(f"Выбрано аудио устройство: {device_name} ({alsa_device})")
-                return alsa_device
+        # Ищем устройства по приоритету
+        for priority_name, search_pattern in audio_priorities:
+            for card_num, card_info in detected_cards.items():
+                card_name = card_info['name']
+                card_desc = card_info['desc']
+                
+                # Проверяем вхождение паттерна в имя или описание карты
+                if (search_pattern.lower() in card_name.lower() or 
+                    search_pattern.lower() in card_desc.lower()):
+                    
+                    alsa_device = f"alsa/hw:{card_num},0"
+                    logger.info(f"✅ Выбрано аудио устройство: {priority_name} -> {card_name} ({alsa_device})")
+                    logger.info(f"📋 Описание карты: {card_desc}")
+                    return alsa_device
         
         # Если ничего не найдено, используем по умолчанию
-        logger.warning("Не удалось определить аудио устройство, используем по умолчанию")
+        logger.warning("⚠️ НЕ УДАЛОСЬ определить специфическое аудио устройство!")
+        logger.warning(f"📊 Доступные карты: {list(detected_cards.keys())}")
+        logger.warning("🔄 Используем 'auto' - MPV выберет устройство сам")
+        logger.warning("💡 Если звука нет, проверьте подключение Scarlett 2i2")
         return "auto"
         
     except Exception as e:
@@ -265,6 +296,10 @@ def ensure_mpv_is_running():
         
         # Запускаем MPV с оптимальными настройками аудио и видео
         audio_device = get_best_audio_device()
+        
+        # ВАЖНО: НЕ КОММЕНТИРОВАТЬ --audio-device! 
+        # Эта строка обеспечивает направление звука на правильное устройство.
+        # Если звука нет - проблема в номере карты, а не в этом параметре!
         command = [
             "mpv", 
             "--idle", 
@@ -272,7 +307,7 @@ def ensure_mpv_is_running():
             "--fs",                            # Полноэкранный режим
             "--geometry=100%:100%",            # Растянуть на весь экран
             "--osd-level=1",                   # Минимальный OSD
-            f"--audio-device={audio_device}",  # КРИТИЧНО! НЕ КОММЕНТИРОВАТЬ! Нужно для Scarlett 2i2
+            f"--audio-device={audio_device}",  # ⚠️ КРИТИЧЕСКИ ВАЖНО - НЕ УДАЛЯТЬ!
             "--volume=100",                    # Максимальная громкость
             "--audio-channels=stereo",         # Стерео режим
             "--audio-samplerate=0",            # Не ресемплируем - важно для DSD!
