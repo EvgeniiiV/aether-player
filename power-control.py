@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 # Конфигурация
-POWER_GPIO = 21  # GPIO пин для управления реле (BCM нумерация) - ИСПРАВЛЕНО!
+POWER_GPIO = 18  # GPIO пин для управления реле (BCM нумерация) - ПЕРЕКЛЮЧЕНО НА GPIO18!
 PIDFILE = "/home/eu/aether-player/aether-power-gpio.pid"
 STATUSFILE = "/home/eu/aether-player/aether-power-status.json"
 
