@@ -72,3 +72,17 @@ aether-power-gpio.pid
 
 # Backup files
 *.backup
+
+# Junk files that keep appearing
+GPIO-SAFETY-CRITICAL.md
+power-control.sh
+power-control-*.sh
+power-control-new.py
+sync-to-windows.sh
+test-dsf.sh
+reminder-vscode-temp.sh
+cleanup-vscode-junk.sh
+ВРЕМЕННОЕ_РЕШЕНИЕ_VSCODE.md
+
+# Autostart logs
+autostart.log
