@@ -141,6 +141,7 @@
         .control-card.safe { border-left-color: #48bb78; }
         .control-card.reboot { border-left-color: #4299e1; }
         .control-card.shutdown { border-left-color: #f56565; }
+        .control-card.memory { border-left-color: #9f7aea; }
         .control-card.cancel { border-left-color: #ed8936; }
         
         .control-header {
@@ -206,6 +207,16 @@
         
         .shutdown-btn:hover {
             background: linear-gradient(135deg, #e53e3e, #c53030);
+            transform: translateY(-2px);
+        }
+        
+        .memory-btn {
+            background: linear-gradient(135deg, #9f7aea, #805ad5);
+            color: white;
+        }
+        
+        .memory-btn:hover {
+            background: linear-gradient(135deg, #805ad5, #6b46c1);
             transform: translateY(-2px);
         }
         
@@ -418,7 +429,7 @@
                     </button>
                 </div>
                 
-                <div class="control-card shutdown">
+                                <div class="control-card shutdown">
                     <div class="control-header">
                         <div class="control-icon">⚡</div>
                         <div class="control-title">Выключение</div>
@@ -426,6 +437,17 @@
                     <p class="control-description">Безопасно выключает Raspberry Pi через 1 минуту</p>
                     <button class="control-btn shutdown-btn" onclick="systemAction('shutdown')">
                         ⚡ Выключить
+                    </button>
+                </div>
+                
+                <div class="control-card memory">
+                    <div class="control-header">
+                        <div class="control-icon">🧠</div>
+                        <div class="control-title">Анализ памяти</div>
+                    </div>
+                    <p class="control-description">Создает детальный отчет об использовании памяти</p>
+                    <button class="control-btn memory-btn" onclick="memoryAnalysis()">
+                        🧠 Анализировать
                     </button>
                 </div>
                 
@@ -605,6 +627,39 @@
                     countdownDiv.remove();
                 }
             }, 1000);
+        }
+        
+        function memoryAnalysis() {
+            const button = event.target;
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = '⏳ Анализируем...';
+            
+            fetch('/api/memory-analysis', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert(`✅ Анализ памяти завершен!\n\nОтчет сохранен: ${data.report_path}\n\nОбновите страницу, чтобы увидеть отчет в списке.`);
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    alert('❌ Ошибка анализа памяти: ' + (data.error || 'Неизвестная ошибка'));
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('❌ Ошибка выполнения анализа памяти');
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.textContent = originalText;
+            });
         }
     </script>
 </body>

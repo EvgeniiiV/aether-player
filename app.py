@@ -927,10 +927,13 @@ def monitor_page():
                                           capture_output=True, text=True)
             if service_result.returncode == 0 and service_result.stdout.strip() == 'active':
                 service_status = "Работает (systemd)"
+            elif service_result.returncode != 0 and service_result.stdout.strip() in ['inactive', 'failed']:
+                # Сервис настроен, но неактивен - приложение запущено вручную
+                service_status = "Работает (ручной запуск)"
             else:
                 service_status = "Остановлен"
         except:
-            pass  # Сервис не настроен
+            pass  # Сервис не настроен, остается "Работает (ручной запуск)"
             
     except Exception as e:
         logger.error(f"Ошибка получения данных мониторинга: {e}")
@@ -942,9 +945,13 @@ def monitor_page():
     # Получаем последние отчеты
     reports = []
     try:
-        report_files = glob.glob('/tmp/aether-monitor-*.txt')
+        # Собираем отчеты мониторинга и памяти
+        report_files = []
+        report_files.extend(glob.glob('/tmp/aether-monitor-*.txt'))
+        report_files.extend(glob.glob('/tmp/memory-report-*.txt'))
+        
         report_files.sort(key=os.path.getmtime, reverse=True)
-        for report_file in report_files[:5]:  # Последние 5 отчетов
+        for report_file in report_files[:10]:  # Последние 10 отчетов
             mtime = os.path.getmtime(report_file)
             reports.append({
                 'file': os.path.basename(report_file),
@@ -1003,10 +1010,13 @@ def api_monitor():
                                           capture_output=True, text=True)
             if service_result.returncode == 0 and service_result.stdout.strip() == 'active':
                 service_status = "Работает (systemd)"
+            elif service_result.returncode != 0 and service_result.stdout.strip() in ['inactive', 'failed']:
+                # Сервис настроен, но неактивен - приложение запущено вручную
+                service_status = "Работает (ручной запуск)"
             else:
                 service_status = "Остановлен"
         except:
-            pass  # Сервис не настроен
+            pass  # Сервис не настроен, остается "Работает (ручной запуск)"
             
     except Exception as e:
         logger.error(f"Ошибка получения данных мониторинга: {e}")
@@ -1018,9 +1028,13 @@ def api_monitor():
     # Получаем последние отчеты
     reports = []
     try:
-        report_files = glob.glob('/tmp/aether-monitor-*.txt')
+        # Собираем отчеты мониторинга и памяти
+        report_files = []
+        report_files.extend(glob.glob('/tmp/aether-monitor-*.txt'))
+        report_files.extend(glob.glob('/tmp/memory-report-*.txt'))
+        
         report_files.sort(key=os.path.getmtime, reverse=True)
-        for report_file in report_files[:5]:  # Последние 5 отчетов
+        for report_file in report_files[:10]:  # Последние 10 отчетов
             mtime = os.path.getmtime(report_file)
             reports.append({
                 'file': os.path.basename(report_file),
@@ -1050,7 +1064,9 @@ def view_report(filename):
     import os
     
     # Проверяем безопасность имени файла
-    if not filename.startswith('aether-monitor-') or '..' in filename:
+    # Разрешаем файлы, которые начинаются с aether-monitor- или memory-report- и заканчиваются на .txt
+    if not ((filename.startswith('aether-monitor-') or filename.startswith('memory-report-')) and 
+            filename.endswith('.txt')) or '..' in filename:
         return "Недопустимое имя файла", 400
     
     report_path = f'/tmp/{filename}'
@@ -1063,6 +1079,41 @@ def view_report(filename):
         return f"<pre style='font-family: monospace; background: #f5f5f5; padding: 20px;'>{content}</pre>"
     except Exception as e:
         return f"Ошибка чтения отчета: {e}", 500
+
+@app.route("/api/memory-analysis", methods=['POST'])
+def memory_analysis():
+    """Запуск детального анализа памяти"""
+    # Генерируем отчет о памяти
+    logger.info("Запуск анализа памяти")
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['python3', '/home/eu/aether-player/memory-monitor.py', '--save'], 
+            capture_output=True, text=True, timeout=10
+        )
+        
+        logger.info(f"Результат выполнения скрипта: returncode={result.returncode}")
+        logger.info(f"stdout: {result.stdout}")
+        logger.info(f"stderr: {result.stderr}")
+        
+        if result.returncode == 0:
+            output = result.stdout.strip()
+            if 'Отчет сохранен:' in output:
+                filename = output.split('Отчет сохранен: ')[1].strip()
+                return jsonify({
+                    'status': 'success', 
+                    'message': 'Отчет о памяти создан',
+                    'report_path': filename
+                })
+            else:
+                logger.warning(f"Неожиданный вывод скрипта: {output}")
+                return jsonify({'status': 'error', 'error': 'Ошибка создания отчета'})
+        else:
+            logger.error(f"Ошибка выполнения скрипта: returncode={result.returncode}, stderr={result.stderr}")
+            return jsonify({'status': 'error', 'error': f'Ошибка выполнения анализа памяти: {result.stderr}'})
+    except Exception as e:
+        logger.error(f"Исключение при выполнении анализа памяти: {e}")
+        return jsonify({'status': 'error', 'error': f'Ошибка: {str(e)}'})
 
 @app.route("/system/shutdown", methods=['POST'])
 def system_shutdown():
