@@ -193,6 +193,35 @@ def get_best_audio_device():
         logger.error(f"Ошибка определения аудио устройства: {e}")
         return "auto"
 
+def get_file_duration_ffprobe(filepath):
+    """
+    Получает длительность аудио файла через ffprobe как fallback для DSF/DSD файлов
+    """
+    try:
+        import subprocess
+        cmd = [
+            'ffprobe', 
+            '-v', 'quiet', 
+            '-print_format', 'json', 
+            '-show_format', 
+            filepath
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            import json
+            probe_data = json.loads(result.stdout)
+            duration = float(probe_data.get('format', {}).get('duration', 0))
+            if duration > 0:
+                logger.info(f"📊 FFprobe определил duration: {duration:.1f}s для {os.path.basename(filepath)}")
+                return duration
+        else:
+            logger.warning(f"FFprobe error: {result.stderr}")
+    except Exception as e:
+        logger.warning(f"Ошибка ffprobe для {filepath}: {e}")
+    
+    return None
+
 # Глобальные переменные
 player_process = None
 last_position_update = time.time()
@@ -313,6 +342,10 @@ def ensure_mpv_is_running():
             "--audio-samplerate=0",            # Не ресемплируем - важно для DSD!
             # "--audio-format=auto",           # УБРАНО - неверный параметр
             "--ad=+dsd_lsbf,+dsd_msbf,+dsd_lsbf_planar,+dsd_msbf_planar",  # Явно включаем DSD декодеры
+            "--audio-buffer=1.0",              # Увеличенный буфер для DSF/DSD стабильности
+            "--demuxer-readahead-secs=20",     # Больше предзагрузки для DSF файлов
+            "--audio-stream-silence",          # Корректная обработка "тишины" в DSD потоках
+            "--demuxer-cache-wait",            # Ждем загрузки демуксера для DSF
             "--hwdec=auto-safe",               # Безопасное аппаратное декодирование
             "--vo=gpu,drm,fbdev",              # Варианты видео вывода (по приоритету)
             "--profile=sw-fast"                # Профиль для программного декодирования
@@ -412,17 +445,31 @@ def handle_playlist_change(direction):
         # Синхронизируемся с MPV для получения duration
         time.sleep(0.5)
         
-        # Получаем duration
+        # Получаем duration с улучшенной поддержкой DSF файлов
         raw_duration = None
-        for _ in range(5):  # Исправлено: используем _ вместо неиспользуемой переменной attempt
+        is_dsf_file = filepath.lower().endswith(('.dsf', '.dff'))
+        
+        # Для DSF файлов используем более агрессивный подход
+        retry_count = 10 if is_dsf_file else 5
+        sleep_interval = 0.5 if is_dsf_file else 0.2
+        
+        for attempt in range(retry_count):
             raw_duration = get_mpv_property("duration")
             if raw_duration and raw_duration > 0:
+                logger.info(f"🎵 MPV duration получен на попытке {attempt+1}: {raw_duration:.1f}s")
                 break
-            time.sleep(0.2)
+            time.sleep(sleep_interval)
+        
+        # Fallback для DSF файлов: используем ffprobe
+        if not raw_duration and is_dsf_file:
+            logger.info("🔍 MPV не смог получить duration для DSF, пробуем ffprobe...")
+            raw_duration = get_file_duration_ffprobe(filepath)
+            if raw_duration:
+                logger.info(f"✅ FFprobe успешно определил duration: {raw_duration:.1f}s")
         
         if not raw_duration:
             raw_duration = 100.0
-            logger.warning(f"Не удалось получить duration для {filepath}, используем {raw_duration}")
+            logger.warning(f"⚠️ Не удалось получить duration для {filepath}, используем fallback: {raw_duration}s")
         
         player_state.update({
             'status': 'playing',
@@ -541,17 +588,31 @@ def play():
     # СИНХРОНИЗАЦИЯ С MPV - получаем duration и volume
     time.sleep(0.5)
     
-    # Получаем duration
+    # Получаем duration с улучшенной поддержкой DSF файлов
     raw_duration = None
-    for _ in range(5):  # Исправлено: используем _ вместо неиспользуемой переменной attempt
+    is_dsf_file = full_path.lower().endswith(('.dsf', '.dff'))
+    
+    # Для DSF файлов используем более агрессивный подход
+    retry_count = 10 if is_dsf_file else 5
+    sleep_interval = 0.5 if is_dsf_file else 0.2
+    
+    for attempt in range(retry_count):
         raw_duration = get_mpv_property("duration")
         if raw_duration and raw_duration > 0:
+            logger.info(f"🎵 MPV duration получен на попытке {attempt+1}: {raw_duration:.1f}s")
             break
-        time.sleep(0.2)
+        time.sleep(sleep_interval)
+    
+    # Fallback для DSF файлов: используем ffprobe
+    if not raw_duration and is_dsf_file:
+        logger.info("🔍 MPV не смог получить duration для DSF, пробуем ffprobe...")
+        raw_duration = get_file_duration_ffprobe(full_path)
+        if raw_duration:
+            logger.info(f"✅ FFprobe успешно определил duration: {raw_duration:.1f}s")
     
     if not raw_duration:
         raw_duration = 100.0
-        logger.warning(f"Не удалось получить duration, используем {raw_duration}")
+        logger.warning(f"⚠️ Не удалось получить duration, используем fallback: {raw_duration}s")
     
     volume = get_mpv_property("volume") or 100
     
