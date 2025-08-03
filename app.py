@@ -222,6 +222,37 @@ def get_file_duration_ffprobe(filepath):
     
     return None
 
+def save_volume_setting(volume):
+    """Сохраняет настройку громкости в файл"""
+    try:
+        volume_file = '/tmp/aether-player-volume.txt'
+        with open(volume_file, 'w') as f:
+            f.write(str(int(volume)))
+        logger.debug(f"💾 Громкость сохранена: {volume}%")
+    except Exception as e:
+        logger.warning(f"Не удалось сохранить громкость: {e}")
+
+def load_volume_setting():
+    """Загружает сохраненную настройку громкости"""
+    try:
+        volume_file = '/tmp/aether-player-volume.txt'
+        if os.path.exists(volume_file):
+            with open(volume_file, 'r') as f:
+                saved_volume = int(f.read().strip())
+                # Безопасное ограничение: не более 70% при запуске
+                safe_volume = min(saved_volume, 70)
+                if saved_volume > 70:
+                    logger.info(f"🔒 Громкость ограничена для безопасности: {saved_volume}% -> {safe_volume}%")
+                else:
+                    logger.info(f"📂 Загружена сохраненная громкость: {safe_volume}%")
+                return safe_volume
+    except Exception as e:
+        logger.warning(f"Не удалось загрузить громкость: {e}")
+    
+    # По умолчанию - безопасные 50%
+    logger.info("🔊 Установлена громкость по умолчанию: 50%")
+    return 50
+
 # Глобальные переменные
 player_process = None
 last_position_update = time.time()
@@ -232,7 +263,7 @@ player_state = {
     'track': '',
     'position': 0.0,
     'duration': 0.0,
-    'volume': 100,
+    'volume': load_volume_setting(),  # Загружаем сохраненную громкость
     'playlist': [],
     'playlist_index': -1
 }
@@ -323,8 +354,11 @@ def ensure_mpv_is_running():
         except:
             pass
         
-        # Запускаем MPV с оптимальными настройками аудио и видео
+        # Запускаем MPV с базовыми настройками (без --no-video для поддержки видео)
         audio_device = get_best_audio_device()
+        
+        # Получаем безопасную стартовую громкость
+        safe_startup_volume = int(player_state['volume'] * 1.3)  # Преобразуем в MPV формат
         
         # ВАЖНО: НЕ КОММЕНТИРОВАТЬ --audio-device! 
         # Эта строка обеспечивает направление звука на правильное устройство.
@@ -333,10 +367,12 @@ def ensure_mpv_is_running():
             "mpv", 
             "--idle", 
             f"--input-ipc-server={MPV_SOCKET}", 
-            "--no-video",                      # ОТКЛЮЧАЕМ видео для аудио файлов
             f"--audio-device={audio_device}",  # ⚠️ КРИТИЧЕСКИ ВАЖНО - НЕ УДАЛЯТЬ!
-            "--volume=100",                    # Максимальная громкость
-            # УБИРАЕМ ВСЕ ОСТАЛЬНЫЕ ПАРАМЕТРЫ ДЛЯ МАКСИМАЛЬНОЙ ПРОСТОТЫ
+            f"--volume={safe_startup_volume}", # Безопасная стартовая громкость
+            "--softvol-max=200",               # Максимальная программная громкость 200% для плавной регулировки
+            "--vo=gpu",                        # Видео вывод через GPU для HDMI
+            "--hwdec=auto",                    # Аппаратное декодирование видео
+            # Минимальные параметры для поддержки и аудио, и видео
         ]
         
         # Простой запуск MPV без изоляции - исправление проблемы запуска
@@ -565,13 +601,17 @@ def play():
         logger.error(f"Ошибка загрузки файла: {mpv_result}")
         return jsonify({'status': 'error', 'message': 'Ошибка загрузки файла'})
     
-    # Дополнительные настройки для видео
+    # Настройки в зависимости от типа файла
     if file_type == 'video':
         logger.info(f"Воспроизведение видео: {os.path.basename(full_path)}")
-        # Включаем полноэкранный режим для видео
+        # Включаем видео вывод и полноэкранный режим для видео
+        mpv_command({"command": ["set_property", "vid", "auto"]})  # Включаем видео
         mpv_command({"command": ["set_property", "fullscreen", True]})
+        mpv_command({"command": ["set_property", "vo", "gpu"]})  # GPU вывод для HDMI
     else:
         logger.info(f"Воспроизведение аудио: {os.path.basename(full_path)}")
+        # Для аудио файлов отключаем видео вывод
+        mpv_command({"command": ["set_property", "vid", "no"]})
     
     # СИНХРОНИЗАЦИЯ С MPV - получаем duration и volume
     time.sleep(0.5)
@@ -602,7 +642,10 @@ def play():
         raw_duration = 100.0
         logger.warning(f"⚠️ Не удалось получить duration, используем fallback: {raw_duration}s")
     
-    volume = get_mpv_property("volume") or 100
+    # Получаем громкость от MPV и преобразуем обратно для пользователя
+    mpv_volume = get_mpv_property("volume") or int(player_state['volume'] * 1.3)
+    user_volume = int(mpv_volume / 1.3)  # Обратное преобразование
+    user_volume = max(0, min(100, user_volume))  # Ограничиваем диапазон
     
     # Снимаем паузу если нужно
     pause_state = get_mpv_property("pause")
@@ -615,7 +658,7 @@ def play():
         'track': os.path.basename(full_path),
         'position': 0.0,
         'duration': raw_duration,
-        'volume': volume,
+        'volume': user_volume,  # Используем пользовательское значение громкости
         'playlist': playlist,
         'playlist_index': playlist_index
     })
@@ -738,11 +781,28 @@ def playlist_change():
 
 @app.route("/set_volume", methods=['POST'])
 def set_volume():
-    """Установка громкости"""
-    volume = request.form.get('volume', 100, type=int)
-    mpv_command({"command": ["set_property", "volume", volume]})
-    player_state['volume'] = volume
-    return jsonify({'status': 'ok'})
+    """Установка громкости с использованием встроенных возможностей MPV"""
+    user_volume = request.form.get('volume', 50, type=int)
+    
+    # Ограничиваем диапазон для безопасности
+    user_volume = max(0, min(100, user_volume))
+    
+    # Преобразуем 0-100% пользователя в 0-200% MPV для более плавной регулировки
+    # При пользовательских 0% -> MPV 0%, при 100% -> MPV 130% (комфортный максимум)
+    mpv_volume = int(user_volume * 1.3)  # Простое линейное масштабирование
+    
+    logger.debug(f"Громкость: пользователь {user_volume}% -> MPV {mpv_volume}%")
+    
+    # Отправляем значение в MPV
+    mpv_command({"command": ["set_property", "volume", mpv_volume]})
+    
+    # Сохраняем пользовательское значение
+    player_state['volume'] = user_volume
+    
+    # Сохраняем настройку для следующего запуска
+    save_volume_setting(user_volume)
+    
+    return jsonify({'status': 'ok', 'user_volume': user_volume, 'mpv_volume': mpv_volume})
 
 @app.route("/view_image", methods=['POST'])
 def view_image():
