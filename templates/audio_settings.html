@@ -1,0 +1,571 @@
+<!DOC    <title>Настройки аудио - Aether Player</title>
+    <!-- UPDATED: 2025-08-03 22:22 v2 -->YPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Настройки Аудио - Aether Player</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #222;
+            color: #eee;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #444;
+        }
+        
+        .back-button {
+            background: #666;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        
+        .back-button:hover {
+            background: #777;
+        }
+        
+        .preset-section {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .preset-card {
+            background: #333;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+        
+        .preset-card:hover:not(.active) {
+            border-color: #666;
+            background: #383838;
+        }
+        
+        .preset-card:focus {
+            outline: none;
+        }
+        
+        .preset-card.active {
+            border-color: #4488ff;
+            background: #2a3a4a;
+            box-shadow: 0 0 15px rgba(68, 136, 255, 0.4);
+        }
+        
+        .preset-card.active .preset-name {
+            color: #66aaff;
+        }
+        
+        .preset-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #4488ff;
+        }
+        
+        .preset-description {
+            color: #bbb;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        
+        .custom-section {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: none;
+        }
+        
+        .custom-section.active {
+            display: block;
+        }
+        
+        .slider-group {
+            margin-bottom: 20px;
+        }
+        
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .slider-description {
+            color: #bbb;
+            font-size: 0.85em;
+            margin-bottom: 10px;
+            line-height: 1.3;
+        }
+        
+        .slider {
+            width: 100%;
+            height: 8px;
+            background: #444;
+            border-radius: 5px;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #4488ff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #4488ff;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .info-section {
+            background: #1a2a3a;
+            border-left: 4px solid #4488ff;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 0 5px 5px 0;
+        }
+        
+        .apply-button {
+            background: #4488ff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.1em;
+            width: 100%;
+            margin-top: 15px;
+        }
+        
+        .apply-button:hover {
+            background: #3377ee;
+        }
+        
+        .apply-button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .status-message {
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .status-message.success {
+            background: #2a4a2a;
+            color: #8f8;
+            border: 1px solid #4a4;
+        }
+        
+        .status-message.error {
+            background: #4a2a2a;
+            color: #f88;
+            border: 1px solid #a44;
+        }
+
+        .status-message.info {
+            background: #2a2a4a;
+            color: #88f;
+            border: 1px solid #44a;
+        }
+
+        .current-filters {
+            background: #1a3a1a;
+            border: 1px solid #4a4;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #8f8;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎵 Виртуальная Стереосцена для Наушников</h1>
+        <a href="/" class="back-button">← Назад к плееру</a>
+    </div>
+
+    <div class="info-section">
+        <h3>💡 О виртуальной стереосцене</h3>
+        <p>Эта функция создает иллюзию прослушивания музыки через колонки вместо наушников. Используются психоакустические эффекты для имитации естественного восприятия звука.</p>
+        <p><strong>Рекомендация:</strong> начните с предустановки "Деликатное" и постепенно увеличивайте интенсивность по своему вкусу.</p>
+    </div>
+
+    <div class="preset-section">
+        <h2>📋 Предустановки</h2>
+        <div class="preset-grid" id="presetGrid">
+            <!-- Предустановки будут загружены через JavaScript -->
+        </div>
+    </div>
+
+    <div class="custom-section" id="customSection">
+        <h2>🔧 Пользовательские настройки</h2>
+        
+        <div class="slider-group">
+            <div class="slider-label">
+                <span>Сила кроссфида</span>
+                <span id="crossfeed-strength-value">0.5</span>
+            </div>
+            <div class="slider-description">
+                Смешивает левый и правый каналы. Устраняет "туннельный" эффект наушников.
+            </div>
+            <input type="range" class="slider" id="crossfeed-strength" min="0" max="1" step="0.1" value="0.5">
+        </div>
+
+        <div class="slider-group">
+            <div class="slider-label">
+                <span>Диапазон кроссфида</span>
+                <span id="crossfeed-range-value">0.6</span>
+            </div>
+            <div class="slider-description">
+                Определяет, какие частоты обрабатывать (0.0 = все частоты, 1.0 = только высокие).
+            </div>
+            <input type="range" class="slider" id="crossfeed-range" min="0" max="1" step="0.1" value="0.6">
+        </div>
+
+        <div class="slider-group">
+            <div class="slider-label">
+                <span>Уровень эффекта Хааса</span>
+                <span id="haas-level-out-value">1.0</span>
+            </div>
+            <div class="slider-description">
+                Общая громкость эффекта расширения стереосцены через микрозадержки.
+            </div>
+            <input type="range" class="slider" id="haas-level-out" min="0" max="3" step="0.1" value="1.0">
+        </div>
+
+        <div class="slider-group">
+            <div class="slider-label">
+                <span>Ширина стереосцены</span>
+                <span id="haas-side-gain-value">0.8</span>
+            </div>
+            <div class="slider-description">
+                Усиление боковых каналов для создания эффекта ширины.
+            </div>
+            <input type="range" class="slider" id="haas-side-gain" min="0" max="3" step="0.1" value="0.8">
+        </div>
+
+        <div class="slider-group">
+            <div class="slider-label">
+                <span>Усиление стерео</span>
+                <span id="extrastereo-multiplier-value">1.5</span>
+            </div>
+            <div class="slider-description">
+                Увеличивает разность между левым и правым каналами.
+            </div>
+            <input type="range" class="slider" id="extrastereo-multiplier" min="0" max="3" step="0.1" value="1.5">
+        </div>
+
+        <div class="slider-group">
+            <div class="slider-label">
+                <span>Объемный звук</span>
+                <span id="surround-level-out-value">1.0</span>
+            </div>
+            <div class="slider-description">
+                Создает иллюзию многоканального звука из стерео-источника.
+            </div>
+            <input type="range" class="slider" id="surround-level-out" min="0" max="3" step="0.1" value="1.0">
+        </div>
+
+        <button class="apply-button" id="applyCustomButton">Применить пользовательские настройки</button>
+        
+        <div class="current-filters" id="currentFilters" style="display: none;">
+            <strong>Текущие фильтры:</strong><br>
+            <span id="filtersText"></span>
+        </div>
+    </div>
+
+    <div class="status-message" id="statusMessage"></div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        let currentPreset = 'off';
+        let customSettings = {};
+        let socket = null;
+
+        // Инициализация SocketIO
+        try {
+            socket = io();
+            
+            // Обработчик изменения аудио-предустановки от других клиентов
+            socket.on('audio_enhancement_changed', function(data) {
+                if (data.preset !== currentPreset) {
+                    updateActivePreset(data.preset);
+                    
+                    // Показать/скрыть пользовательские настройки
+                    if (data.preset === 'custom') {
+                        document.getElementById('customSection').classList.add('active');
+                    } else {
+                        document.getElementById('customSection').classList.remove('active');
+                    }
+                }
+            });
+        } catch (e) {
+            console.log('SocketIO недоступен, синхронизация отключена');
+        }
+
+        // Загрузка предустановок при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPresets();
+            setupSliders();
+        });
+
+        async function loadPresets() {
+            try {
+                const response = await fetch('/api/audio-enhancement/presets');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    currentPreset = data.current;
+                    customSettings = data.custom_settings;
+                    renderPresets(data.presets);
+                    updateCustomSliders();
+                    
+                    // Показать пользовательские настройки если активна custom предустановка
+                    if (currentPreset === 'custom') {
+                        document.getElementById('customSection').classList.add('active');
+                    }
+                }
+            } catch (error) {
+                showStatus('Ошибка загрузки предустановок: ' + error.message, 'error');
+            }
+        }
+
+        function renderPresets(presets) {
+            const grid = document.getElementById('presetGrid');
+            grid.innerHTML = '';
+
+            // Добавляем предустановку "custom"
+            const allPresets = {...presets, custom: {name: 'Пользовательское', description: 'Настраиваемые параметры'}};
+
+            for (const [key, preset] of Object.entries(allPresets)) {
+                const card = document.createElement('div');
+                card.className = `preset-card ${currentPreset === key ? 'active' : ''}`;
+                card.setAttribute('data-preset', key);
+                card.innerHTML = `
+                    <div class="preset-name">${preset.name}</div>
+                    <div class="preset-description">${preset.description}</div>
+                `;
+                card.addEventListener('click', () => selectPreset(key));
+                grid.appendChild(card);
+            }
+        }
+
+        async function selectPreset(presetName) {
+            if (presetName === 'custom') {
+                // Показать пользовательские настройки
+                document.getElementById('customSection').classList.add('active');
+                updateActivePreset(presetName);
+                
+                // Сохранить выбор custom предустановки на сервере
+                try {
+                    const response = await fetch('/api/audio-enhancement/apply', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({preset: presetName})
+                    });
+
+                    const data = await response.json();
+                    if (data.status !== 'success') {
+                        showStatus('Ошибка: ' + data.error, 'error');
+                    }
+                } catch (error) {
+                    showStatus('Ошибка применения предустановки: ' + error.message, 'error');
+                }
+                return;
+            } else {
+                // Скрыть пользовательские настройки
+                document.getElementById('customSection').classList.remove('active');
+            }
+
+            try {
+                const response = await fetch('/api/audio-enhancement/apply', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({preset: presetName})
+                });
+
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    updateActivePreset(presetName);
+                    // Убираем показ статусных сообщений для лучшего UX
+                } else {
+                    showStatus('Ошибка: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showStatus('Ошибка применения предустановки: ' + error.message, 'error');
+            }
+        }
+
+        function updateActivePreset(presetName) {
+            currentPreset = presetName;
+            
+            // Обновить активную карточку
+            document.querySelectorAll('.preset-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            
+            // Найти карточку по data-preset атрибуту
+            const activeCard = document.querySelector(`.preset-card[data-preset="${presetName}"]`);
+            if (activeCard) {
+                activeCard.classList.add('active');
+            }
+        }
+
+        function setupSliders() {
+            const sliders = [
+                'crossfeed-strength',
+                'crossfeed-range', 
+                'haas-level-out',
+                'haas-side-gain',
+                'extrastereo-multiplier',
+                'surround-level-out'
+            ];
+
+            sliders.forEach(sliderId => {
+                const slider = document.getElementById(sliderId);
+                const valueSpan = document.getElementById(sliderId + '-value');
+                
+                slider.addEventListener('input', function() {
+                    valueSpan.textContent = this.value;
+                    updateCustomSetting(sliderId.replace(/-/g, '_'), parseFloat(this.value));
+                });
+            });
+
+            // Кнопка применения пользовательских настроек
+            document.getElementById('applyCustomButton').addEventListener('click', applyCustomSettings);
+        }
+
+        function updateCustomSliders() {
+            for (const [key, value] of Object.entries(customSettings)) {
+                const sliderId = key.replace(/_/g, '-');
+                const slider = document.getElementById(sliderId);
+                const valueSpan = document.getElementById(sliderId + '-value');
+                
+                if (slider && valueSpan) {
+                    slider.value = value;
+                    valueSpan.textContent = value;
+                }
+            }
+        }
+
+        function updateCustomSetting(settingName, value) {
+            customSettings[settingName] = value;
+        }
+
+        async function applyCustomSettings() {
+            try {
+                // Сначала обновляем настройки на сервере
+                const updateResponse = await fetch('/api/audio-enhancement/custom', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({settings: customSettings})
+                });
+
+                const updateData = await updateResponse.json();
+                
+                if (updateData.status !== 'success') {
+                    throw new Error(updateData.error);
+                }
+
+                // Затем применяем пользовательскую предустановку
+                const applyResponse = await fetch('/api/audio-enhancement/apply', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({preset: 'custom'})
+                });
+
+                const applyData = await applyResponse.json();
+                
+                if (applyData.status === 'success') {
+                    updateActivePreset('custom');
+                    showStatus('Пользовательские настройки применены', 'success');
+                    
+                    // Показать текущие фильтры
+                    showCurrentFilters();
+                } else {
+                    showStatus('Ошибка применения: ' + applyData.error, 'error');
+                }
+            } catch (error) {
+                showStatus('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        async function showCurrentFilters() {
+            try {
+                const response = await fetch('/api/audio-enhancement/info/custom');
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.filters.length > 0) {
+                    const filtersDiv = document.getElementById('currentFilters');
+                    const filtersText = document.getElementById('filtersText');
+                    filtersText.textContent = data.filters.join(', ');
+                    filtersDiv.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Ошибка получения информации о фильтрах:', error);
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.textContent = message;
+            statusDiv.className = `status-message ${type}`;
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

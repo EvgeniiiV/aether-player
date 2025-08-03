@@ -72,9 +72,14 @@
 <body>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         <h1>Aether Player</h1>
-        <a href="/monitor" class="control-button" style="background-color: #667eea; text-decoration: none; font-size: 0.9em;">
-            🔍 Мониторинг
-        </a>
+        <div style="display: flex; gap: 10px;">
+            <a href="/audio-settings" class="control-button" style="background-color: #6a4c93; text-decoration: none; font-size: 0.9em;">
+                🎵 Настройки аудио
+            </a>
+            <a href="/monitor" class="control-button" style="background-color: #667eea; text-decoration: none; font-size: 0.9em;">
+                🔍 Мониторинг
+            </a>
+        </div>
     </div>
     <h3>Текущая папка: /{{ current_subpath }}</h3>
 
@@ -123,7 +128,10 @@
 
     <!-- ФИНАЛЬНАЯ ПАНЕЛЬ УПРАВЛЕНИЯ -->
     <div id="now-playing-bar">
-        <div id="now-playing-info"><strong>Статус:</strong> Остановлено</div>
+        <div style="display: flex; justify-content: space-between; width: 100%; max-width: 800px;">
+            <div id="now-playing-info"><strong>Статус:</strong> Остановлено</div>
+            <div id="audio-enhancement-info" style="color: #8af;"><strong>Стерео:</strong> <span id="current-preset">Выключено</span></div>
+        </div>
         <div id="progress-container">
             <span id="current-time" data-time="0">00:00</span>
             <input type="range" id="progress-bar" class="slider" value="0" min="0" max="100" step="0.1">
@@ -143,7 +151,24 @@
         </div>
     </div>
 
-    <!-- Убираем зависимость от Socket.IO -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        // Инициализация SocketIO для синхронизации
+        let socket = null;
+        try {
+            socket = io();
+            
+            // Обработчик изменения аудио-предустановки
+            socket.on('audio_enhancement_changed', function(data) {
+                const presetElement = document.getElementById('current-preset');
+                if (presetElement && data.preset_info) {
+                    presetElement.textContent = data.preset_info.name;
+                }
+            });
+        } catch (e) {
+            console.log('SocketIO недоступен, синхронизация отключена');
+        }
+    </script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

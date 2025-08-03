@@ -19,6 +19,9 @@ except ImportError:
 import multiprocessing
 from flask import Flask, render_template, request, redirect, url_for, abort, jsonify, send_from_directory
 
+# Импорт модуля аудио-улучшений
+from audio_enhancement import AudioEnhancement
+
 try:
     from flask_socketio import SocketIO
     SOCKETIO_AVAILABLE = True
@@ -232,6 +235,16 @@ def save_volume_setting(volume):
     except Exception as e:
         logger.warning(f"Не удалось сохранить громкость: {e}")
 
+def save_audio_enhancement_setting(preset):
+    """Сохраняет настройку предустановки аудио в файл"""
+    try:
+        preset_file = '/tmp/aether-player-audio-enhancement.txt'
+        with open(preset_file, 'w') as f:
+            f.write(str(preset))
+        logger.debug(f"💾 Предустановка аудио сохранена: {preset}")
+    except Exception as e:
+        logger.warning(f"Не удалось сохранить предустановку аудио: {e}")
+
 def load_volume_setting():
     """Загружает сохраненную настройку громкости"""
     try:
@@ -253,9 +266,61 @@ def load_volume_setting():
     logger.info("🔊 Установлена громкость по умолчанию: 50%")
     return 50
 
+def load_audio_enhancement_setting():
+    """Загружает сохраненную предустановку виртуальной стереосцены"""
+    try:
+        preset_file = '/tmp/aether-player-audio-enhancement.txt'
+        if os.path.exists(preset_file):
+            with open(preset_file, 'r') as f:
+                saved_preset = f.read().strip()
+                # Проверяем, что предустановка корректна
+                if saved_preset in audio_enhancer.PRESETS:
+                    logger.info(f"📂 Загружена сохраненная предустановка аудио: {saved_preset}")
+                    return saved_preset
+                else:
+                    logger.warning(f"Некорректная сохраненная предустановка: {saved_preset}")
+    except Exception as e:
+        logger.warning(f"Не удалось загрузить предустановку аудио: {e}")
+    
+    # По умолчанию - выключено
+    logger.info("🎵 Установлена предустановка аудио по умолчанию: off")
+    return 'off'
+
+def save_audio_enhancement_setting(preset):
+    """Сохраняет предустановку виртуальной стереосцены в файл"""
+    try:
+        preset_file = '/tmp/aether-player-audio-enhancement.txt'
+        with open(preset_file, 'w') as f:
+            f.write(str(preset))
+        logger.debug(f"💾 Предустановка аудио сохранена: {preset}")
+    except Exception as e:
+        logger.warning(f"Не удалось сохранить предустановку аудио: {e}")
+
+def load_audio_enhancement_setting():
+    """Загружает сохраненную предустановку виртуальной стереосцены"""
+    try:
+        preset_file = '/tmp/aether-player-audio-enhancement.txt'
+        if os.path.exists(preset_file):
+            with open(preset_file, 'r') as f:
+                saved_preset = f.read().strip()
+                if saved_preset in audio_enhancer.PRESETS:
+                    logger.info(f"📂 Загружена сохраненная предустановка аудио: {saved_preset}")
+                    return saved_preset
+                else:
+                    logger.warning(f"Неизвестная предустановка аудио: {saved_preset}, используем 'off'")
+    except Exception as e:
+        logger.warning(f"Не удалось загрузить предустановку аудио: {e}")
+    
+    # По умолчанию - выключено
+    logger.info("🎵 Установлена предустановка аудио по умолчанию: off")
+    return 'off'
+
 # Глобальные переменные
 player_process = None
 last_position_update = time.time()
+
+# Инициализация модуля аудио-улучшений
+audio_enhancer = AudioEnhancement()
 
 # Состояние плеера
 player_state = {
@@ -265,7 +330,8 @@ player_state = {
     'duration': 0.0,
     'volume': load_volume_setting(),  # Загружаем сохраненную громкость
     'playlist': [],
-    'playlist_index': -1
+    'playlist_index': -1,
+    'audio_enhancement': load_audio_enhancement_setting()  # Загружаем сохраненную предустановку
 }
 
 def update_position_if_playing():
@@ -360,6 +426,10 @@ def ensure_mpv_is_running():
         # Получаем безопасную стартовую громкость
         safe_startup_volume = int(player_state['volume'] * 1.3)  # Преобразуем в MPV формат
         
+        # Получаем цепочку аудиофильтров для виртуальной стереосцены
+        enhancement_preset = player_state.get('audio_enhancement', 'off')
+        af_string = audio_enhancer.get_mpv_af_string(enhancement_preset)
+        
         # ВАЖНО: НЕ КОММЕНТИРОВАТЬ --audio-device! 
         # Эта строка обеспечивает направление звука на правильное устройство.
         # Если звука нет - проблема в номере карты, а не в этом параметре!
@@ -374,6 +444,13 @@ def ensure_mpv_is_running():
             "--hwdec=auto",                    # Аппаратное декодирование видео
             # Минимальные параметры для поддержки и аудио, и видео
         ]
+        
+        # Добавляем аудиофильтры если они есть
+        if af_string:
+            command.append(f"--af={af_string}")
+            logger.info(f"🎵 Применены аудиофильтры: {af_string}")
+        else:
+            logger.info("🎵 Аудиофильтры отключены")
         
         # Простой запуск MPV без изоляции - исправление проблемы запуска
         try:
@@ -396,6 +473,60 @@ def ensure_mpv_is_running():
             return False
         
     return True
+
+def apply_audio_enhancement(preset_name='off'):
+    """Применяет аудиофильтры для виртуальной стереосцены"""
+    global player_state, audio_enhancer
+    
+    try:
+        # Получаем цепочку фильтров
+        af_string = audio_enhancer.get_mpv_af_string(preset_name)
+        
+        # Обновляем состояние ВСЕГДА (даже если MPV не запущен)
+        player_state['audio_enhancement'] = preset_name
+        audio_enhancer.current_preset = preset_name
+        
+        # Сохраняем настройку
+        save_audio_enhancement_setting(preset_name)
+        
+        # Проверяем, запущен ли MPV
+        if not player_process or player_process.poll() is not None:
+            logger.info(f"🎵 Предустановка '{preset_name}' сохранена (MPV не запущен, будет применена при воспроизведении)")
+            return True
+        
+        # Если MPV запущен, пытаемся применить фильтры
+        if af_string:
+            # Применяем фильтры через MPV команду set_property af
+            response = mpv_command({"command": ["set_property", "af", af_string]})
+            logger.debug(f"MPV response for af set: {response}")
+            if response and response.get("status") != "error":
+                logger.info(f"🎵 Применены аудиофильтры '{preset_name}': {af_string}")
+                return True
+            else:
+                logger.warning(f"MPV вернул ошибку при применении фильтров: {response}")
+                return True
+        else:
+            # Очищаем фильтры - устанавливаем пустую строку
+            response = mpv_command({"command": ["set_property", "af", ""]})
+            logger.debug(f"MPV response for af clear: {response}")
+            if response and response.get("status") != "error":
+                logger.info(f"🎵 Аудиофильтры очищены (preset: {preset_name})")
+                return True
+            else:
+                logger.warning(f"MPV вернул ошибку при очистке фильтров: {response}")
+                return True
+        
+    except Exception as e:
+        logger.error(f"Ошибка применения аудиофильтров: {e}")
+        # Даже при ошибке, сохраняем настройку для следующего запуска
+        try:
+            player_state['audio_enhancement'] = preset_name
+            audio_enhancer.current_preset = preset_name
+            save_audio_enhancement_setting(preset_name)
+            logger.info(f"🎵 Предустановка '{preset_name}' сохранена несмотря на ошибку")
+            return True
+        except:
+            return False
 
 def stop_mpv_internal():
     """Останавливает MPV процесс"""
@@ -514,6 +645,11 @@ def handle_playlist_change(direction):
 def index():
     return redirect(url_for('browse'))
 
+@app.route("/audio-settings")
+def audio_settings():
+    """Страница настроек виртуальной стереосцены"""
+    return render_template("audio_settings.html")
+
 @app.route("/browse/")
 @app.route("/browse/<path:subpath>")
 def browse(subpath=""):
@@ -548,7 +684,8 @@ def get_status():
         'track': player_state['track'],
         'position': round(player_state['position'], 1),
         'duration': round(player_state['duration'], 1),
-        'volume': player_state['volume']
+        'volume': player_state['volume'],
+        'audio_enhancement': player_state.get('audio_enhancement', 'off')
     })
 
 @app.route("/play", methods=['POST'])
@@ -1114,6 +1251,118 @@ def memory_analysis():
     except Exception as e:
         logger.error(f"Исключение при выполнении анализа памяти: {e}")
         return jsonify({'status': 'error', 'error': f'Ошибка: {str(e)}'})
+
+# ===== API для управления виртуальной стереосценой =====
+
+@app.route("/api/audio-enhancement/presets", methods=['GET'])
+def get_audio_enhancement_presets():
+    """Получить список всех предустановок виртуальной стереосцены"""
+    try:
+        presets = audio_enhancer.get_all_presets()
+        current_preset = player_state.get('audio_enhancement', 'off')
+        
+        return jsonify({
+            'status': 'success',
+            'presets': presets,
+            'current': current_preset,
+            'custom_settings': audio_enhancer.get_custom_settings()
+        })
+    except Exception as e:
+        logger.error(f"Ошибка получения предустановок: {e}")
+        return jsonify({'status': 'error', 'error': str(e)})
+
+@app.route("/api/audio-enhancement/apply", methods=['POST'])
+def apply_audio_enhancement_api():
+    """Применить предустановку виртуальной стереосцены"""
+    try:
+        preset_name = request.json.get('preset', 'off')
+        
+        if preset_name not in audio_enhancer.PRESETS:
+            return jsonify({'status': 'error', 'error': 'Неизвестная предустановка'})
+        
+        success = apply_audio_enhancement(preset_name)
+        
+        if success:
+            preset_info = audio_enhancer.get_preset_info(preset_name)
+            # Проверяем, воспроизводится ли что-то
+            is_playing = player_state.get('status') in ['playing', 'paused']
+            
+            if is_playing:
+                message = f'Применена предустановка: {preset_info["name"]}'
+            else:
+                message = f'Предустановка "{preset_info["name"]}" сохранена и будет применена при воспроизведении'
+            
+            # Отправляем обновление всем подключенным клиентам
+            if socketio:
+                socketio.emit('audio_enhancement_changed', {
+                    'preset': preset_name,
+                    'preset_info': preset_info
+                })
+            
+            return jsonify({
+                'status': 'success',
+                'message': message,
+                'preset': preset_name,
+                'preset_info': preset_info,
+                'applied_immediately': is_playing
+            })
+        else:
+            return jsonify({'status': 'error', 'error': 'Ошибка применения фильтров'})
+            
+    except Exception as e:
+        logger.error(f"Ошибка применения аудио-улучшений: {e}")
+        return jsonify({'status': 'error', 'error': str(e)})
+
+@app.route("/api/audio-enhancement/custom", methods=['POST'])
+def update_custom_audio_enhancement():
+    """Обновить пользовательские настройки аудио-улучшений"""
+    try:
+        settings = request.json.get('settings', {})
+        
+        updated = False
+        for setting_name, value in settings.items():
+            if audio_enhancer.update_custom_setting(setting_name, value):
+                updated = True
+        
+        if updated:
+            # Если активна пользовательская предустановка, применяем изменения
+            if player_state.get('audio_enhancement') == 'custom':
+                apply_audio_enhancement('custom')
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'Пользовательские настройки обновлены',
+                'custom_settings': audio_enhancer.get_custom_settings()
+            })
+        else:
+            return jsonify({'status': 'error', 'error': 'Не удалось обновить настройки'})
+            
+    except Exception as e:
+        logger.error(f"Ошибка обновления пользовательских настроек: {e}")
+        return jsonify({'status': 'error', 'error': str(e)})
+
+@app.route("/api/audio-enhancement/info/<preset_name>", methods=['GET'])
+def get_audio_enhancement_info(preset_name):
+    """Получить детальную информацию о предустановке"""
+    try:
+        if preset_name not in audio_enhancer.PRESETS:
+            return jsonify({'status': 'error', 'error': 'Неизвестная предустановка'})
+        
+        preset_info = audio_enhancer.get_preset_info(preset_name)
+        filters = audio_enhancer.get_filter_chain(preset_name)
+        
+        from audio_enhancement import EFFECT_EXPLANATIONS
+        
+        return jsonify({
+            'status': 'success',
+            'preset_info': preset_info,
+            'filters': filters,
+            'explanations': EFFECT_EXPLANATIONS
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка получения информации о предустановке: {e}")
+        return jsonify({'status': 'error', 'error': str(e)})
 
 @app.route("/system/shutdown", methods=['POST'])
 def system_shutdown():

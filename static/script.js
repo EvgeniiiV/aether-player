@@ -119,6 +119,36 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }
 
+    // Обновление информации о предустановке виртуальной стереосцены
+    function updateAudioEnhancementInfo(currentPreset) {
+        const presetElement = document.getElementById('current-preset');
+        if (!presetElement || !currentPreset) {
+            return;
+        }
+        
+        const presetNames = {
+            'off': 'Выключено',
+            'subtle': 'Деликатное',
+            'natural': 'Естественное',
+            'wide': 'Широкое',
+            'speakers': 'Имитация колонок',
+            'custom': 'Пользовательское'
+        };
+        
+        const displayName = presetNames[currentPreset] || currentPreset;
+        presetElement.textContent = displayName;
+        
+        // Меняем цвет в зависимости от предустановки
+        const presetContainer = document.getElementById('audio-enhancement-info');
+        if (presetContainer) {
+            if (currentPreset === 'off') {
+                presetContainer.style.color = '#666';
+            } else {
+                presetContainer.style.color = '#8af';
+            }
+        }
+    }
+
     // ПРОСТОЕ обновление UI - один в один что прислал backend
     function updateUI(data) {
         const currentTime = Date.now();
@@ -237,6 +267,37 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof data.volume === 'number') {
             volumeSlider.value = data.volume;
             volumePercent.textContent = `${Math.round(data.volume)}%`;
+        }
+        
+        // Обновляем информацию о предустановке аудио
+        updateAudioEnhancementInfo(data.audio_enhancement);
+    }
+    
+    // Функция обновления информации о предустановке аудио
+    function updateAudioEnhancementInfo(preset) {
+        const currentPresetSpan = document.getElementById('current-preset');
+        if (!currentPresetSpan) return;
+        
+        const presetNames = {
+            'off': 'Выключено',
+            'subtle': 'Деликатное',
+            'natural': 'Естественное', 
+            'wide': 'Широкое',
+            'speakers': 'Колонки',
+            'custom': 'Пользовательское'
+        };
+        
+        const displayName = presetNames[preset] || 'Неизвестно';
+        currentPresetSpan.textContent = displayName;
+        
+        // Меняем цвет в зависимости от предустановки
+        const audioEnhancementInfo = document.getElementById('audio-enhancement-info');
+        if (audioEnhancementInfo) {
+            if (preset === 'off') {
+                audioEnhancementInfo.style.color = '#666';
+            } else {
+                audioEnhancementInfo.style.color = '#8af';
+            }
         }
     }
     
