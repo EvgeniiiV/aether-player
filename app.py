@@ -333,22 +333,10 @@ def ensure_mpv_is_running():
             "mpv", 
             "--idle", 
             f"--input-ipc-server={MPV_SOCKET}", 
-            "--fs",                            # Полноэкранный режим
-            "--geometry=100%:100%",            # Растянуть на весь экран
-            "--osd-level=1",                   # Минимальный OSD
+            "--no-video",                      # ОТКЛЮЧАЕМ видео для аудио файлов
             f"--audio-device={audio_device}",  # ⚠️ КРИТИЧЕСКИ ВАЖНО - НЕ УДАЛЯТЬ!
             "--volume=100",                    # Максимальная громкость
-            "--audio-channels=stereo",         # Стерео режим
-            "--audio-samplerate=0",            # Не ресемплируем - важно для DSD!
-            # "--audio-format=auto",           # УБРАНО - неверный параметр
-            "--ad=+dsd_lsbf,+dsd_msbf,+dsd_lsbf_planar,+dsd_msbf_planar",  # Явно включаем DSD декодеры
-            "--audio-buffer=1.0",              # Увеличенный буфер для DSF/DSD стабильности
-            "--demuxer-readahead-secs=20",     # Больше предзагрузки для DSF файлов
-            "--audio-stream-silence",          # Корректная обработка "тишины" в DSD потоках
-            "--demuxer-cache-wait",            # Ждем загрузки демуксера для DSF
-            "--hwdec=auto-safe",               # Безопасное аппаратное декодирование
-            "--vo=gpu,drm,fbdev",              # Варианты видео вывода (по приоритету)
-            "--profile=sw-fast"                # Профиль для программного декодирования
+            # УБИРАЕМ ВСЕ ОСТАЛЬНЫЕ ПАРАМЕТРЫ ДЛЯ МАКСИМАЛЬНОЙ ПРОСТОТЫ
         ]
         
         # Простой запуск MPV без изоляции - исправление проблемы запуска
