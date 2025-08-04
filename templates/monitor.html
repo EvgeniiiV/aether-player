@@ -291,6 +291,13 @@
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
         
+        .refresh-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
         .navigation {
             text-align: center;
             margin-top: 30px;
@@ -467,7 +474,7 @@
         <div class="reports-section">
             <h2>Отчеты мониторинга</h2>
             
-            <button class="refresh-btn" onclick="location.reload()">🔄 Обновить данные</button>
+            <button class="refresh-btn" onclick="createReportAndRefresh()">🔄 Создать новый отчет</button>
             
             {% if reports %}
                 <ul class="reports-list">
@@ -627,6 +634,37 @@
                     countdownDiv.remove();
                 }
             }, 1000);
+        }
+        
+        function createReportAndRefresh() {
+            const button = event.target;
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = '⏳ Создаем отчет...';
+            
+            fetch('/api/memory-analysis', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Успешно создали отчет, обновляем страницу
+                    location.reload();
+                } else {
+                    alert('❌ Ошибка создания отчета: ' + (data.error || 'Неизвестная ошибка'));
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('❌ Ошибка создания отчета');
+                button.disabled = false;
+                button.textContent = originalText;
+            });
         }
         
         function memoryAnalysis() {
