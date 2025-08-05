@@ -307,8 +307,6 @@
             <input type="range" class="slider" id="surround-level-out" min="0" max="3" step="0.1" value="1.0">
         </div>
 
-        <button class="apply-button" id="applyCustomButton">Применить пользовательские настройки</button>
-        
         <div class="current-filters" id="currentFilters" style="display: none;">
             <strong>Текущие фильтры:</strong><br>
             <span id="filtersText"></span>
@@ -322,6 +320,21 @@
         let currentPreset = 'off';
         let customSettings = {};
         let socket = null;
+        let applyTimeout = null; // Для debounce применения настроек
+
+        // Функция для применения пользовательских настроек с задержкой
+        function scheduleApplyCustomSettings() {
+            // Отменяем предыдущий таймер если есть
+            if (applyTimeout) {
+                clearTimeout(applyTimeout);
+            }
+            
+            // Устанавливаем новый таймер на 500ms
+            applyTimeout = setTimeout(async () => {
+                await applyCustomSettings();
+                applyTimeout = null;
+            }, 500);
+        }
 
         // Инициализация SocketIO
         try {
@@ -474,11 +487,13 @@
                 slider.addEventListener('input', function() {
                     valueSpan.textContent = this.value;
                     updateCustomSetting(sliderId.replace(/-/g, '_'), parseFloat(this.value));
+                    
+                    // Если выбран пользовательский пресет, применяем настройки автоматически
+                    if (currentPreset === 'custom') {
+                        scheduleApplyCustomSettings();
+                    }
                 });
             });
-
-            // Кнопка применения пользовательских настроек
-            document.getElementById('applyCustomButton').addEventListener('click', applyCustomSettings);
         }
 
         function updateCustomSliders() {
@@ -528,7 +543,7 @@
                 
                 if (applyData.status === 'success') {
                     updateActivePreset('custom');
-                    showStatus('Пользовательские настройки применены', 'success');
+                    // Убираем статусные сообщения для более плавного UX
                     
                     // Показать текущие фильтры
                     showCurrentFilters();

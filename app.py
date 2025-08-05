@@ -406,6 +406,15 @@ def ensure_mpv_is_running():
     if not player_process or player_process.poll() is not None:
         logger.debug("Запуск MPV процесса")
         
+        # Правильно завершаем старый процесс если он есть
+        if player_process:
+            try:
+                # Очищаем зомби-процесс
+                player_process.wait()
+            except:
+                pass
+            player_process = None
+        
         # Завершаем старые процессы
         try:
             isolated_run(["killall", "mpv"], check=False)
@@ -442,6 +451,12 @@ def ensure_mpv_is_running():
             "--softvol-max=200",               # Максимальная программная громкость 200% для плавной регулировки
             "--vo=gpu",                        # Видео вывод через GPU для HDMI
             "--hwdec=auto",                    # Аппаратное декодирование видео
+            # Аудио форматы - КРИТИЧЕСКИ ВАЖНО для Scarlett 2i2
+            "--audio-format=s32",              # Принудительно используем S32 формат для Scarlett 2i2
+            "--audio-channels=2",              # Стерео режим
+            # DSD/DSF поддержка - КРИТИЧЕСКИ ВАЖНО для воспроизведения DSF файлов
+            "--audio-samplerate=0",            # Не ресемплируем - важно для DSD!
+            "--ad=+dsd_lsbf,+dsd_msbf,+dsd_lsbf_planar,+dsd_msbf_planar",  # Явно включаем DSD декодеры
             # Минимальные параметры для поддержки и аудио, и видео
         ]
         
@@ -532,14 +547,21 @@ def stop_mpv_internal():
     """Останавливает MPV процесс"""
     global player_process
     
-    if player_process and player_process.poll() is None:
+    if player_process:
         try:
-            mpv_command({"command": ["stop"]})
+            # Сначала пытаемся нормально остановить через команду
+            if player_process.poll() is None:
+                mpv_command({"command": ["stop"]})
+                time.sleep(0.1)
         except:
             pass
         
         try:
-            player_process.kill()
+            # Если процесс еще живой - убиваем
+            if player_process.poll() is None:
+                player_process.kill()
+            # ВАЖНО: всегда вызываем wait() для очистки зомби
+            player_process.wait()
         except:
             pass
         
@@ -549,6 +571,7 @@ def stop_mpv_internal():
     try:
         isolated_run(["killall", "mpv"], check=False)
         isolated_run(["sudo", "killall", "fbi"], check=False)
+        time.sleep(0.1)
     except:
         pass
 

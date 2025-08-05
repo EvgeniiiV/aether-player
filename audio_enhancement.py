@@ -105,7 +105,7 @@ class AudioEnhancement:
         
         # Surround upmix - создание объемности
         if self.custom_settings['surround_level_out'] > 0:
-            surround = f"surround=chl_out=2:chl_in=2:level_in=1.0:level_out={self.custom_settings['surround_level_out']}"
+            surround = f"surround=chl_out=stereo:chl_in=stereo:level_in=1.0:level_out={self.custom_settings['surround_level_out']}"
             filters.append(surround)
         
         return filters
