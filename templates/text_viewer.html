@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>{{ filename }} - Aether Player</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #222;
+            color: #eee;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+            line-height: 1.5;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #444;
+        }
+        
+        .back-button {
+            background: #666;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        
+        .back-button:hover {
+            background: #777;
+        }
+        
+        .file-info {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4488ff;
+        }
+        
+        .file-content {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #444;
+            max-height: 70vh;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .file-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .file-content::-webkit-scrollbar-track {
+            background: #333;
+        }
+        
+        .file-content::-webkit-scrollbar-thumb {
+            background: #666;
+            border-radius: 4px;
+        }
+        
+        .file-content::-webkit-scrollbar-thumb:hover {
+            background: #777;
+        }
+        
+        .url-link {
+            color: #4488ff;
+            text-decoration: underline;
+        }
+        
+        .url-link:hover {
+            color: #66aaff;
+        }
+        
+        .empty-file {
+            color: #888;
+            font-style: italic;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .control-button {
+            background: #4488ff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .control-button:hover {
+            background: #3377ee;
+        }
+        
+        .control-button.secondary {
+            background: #666;
+        }
+        
+        .control-button.secondary:hover {
+            background: #777;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                margin: 10px;
+                padding: 15px;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 15px;
+                align-items: flex-start;
+            }
+            
+            .file-content {
+                font-size: 12px;
+                max-height: 60vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📄 {{ filename }}</h1>
+        <a href="{% if parent_path %}{{ url_for('browse', subpath=parent_path) }}{% else %}{{ url_for('browse') }}{% endif %}" class="back-button">← Назад к папке</a>
+    </div>
+
+    <div class="file-info">
+        <strong>📁 Файл:</strong> {{ filepath }}<br>
+        <strong>📝 Кодировка:</strong> {{ encoding }}<br>
+        <strong>📊 Размер:</strong> {{ content|length }} символов
+    </div>
+
+    <div class="controls">
+        <button class="control-button" onclick="copyContent()">📋 Копировать</button>
+        <button class="control-button secondary" onclick="toggleWrap()">🔄 Перенос строк</button>
+        <button class="control-button secondary" onclick="downloadFile()">💾 Скачать</button>
+    </div>
+
+    <div class="file-content" id="fileContent">
+        {% if content.strip() %}
+            {{ content|safe }}
+        {% else %}
+            <div class="empty-file">Файл пустой или не содержит текста</div>
+        {% endif %}
+    </div>
+
+    <script>
+        // Автоматически делаем URL кликабельными
+        document.addEventListener('DOMContentLoaded', function() {
+            const contentDiv = document.getElementById('fileContent');
+            let html = contentDiv.innerHTML;
+            
+            // Простое регулярное выражение для поиска URL
+            const urlRegex = /(https?:\/\/[^\s<>"]+)/g;
+            html = html.replace(urlRegex, '<a href="$1" target="_blank" class="url-link">$1</a>');
+            
+            contentDiv.innerHTML = html;
+        });
+
+        function copyContent() {
+            const content = document.getElementById('fileContent').textContent;
+            navigator.clipboard.writeText(content).then(() => {
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = '✅ Скопировано';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            }).catch(err => {
+                alert('Ошибка копирования: ' + err);
+            });
+        }
+
+        function toggleWrap() {
+            const contentDiv = document.getElementById('fileContent');
+            const currentWrap = contentDiv.style.whiteSpace;
+            
+            if (currentWrap === 'nowrap') {
+                contentDiv.style.whiteSpace = 'pre-wrap';
+                event.target.textContent = '🔄 Перенос строк';
+            } else {
+                contentDiv.style.whiteSpace = 'nowrap';
+                event.target.textContent = '📏 Без переноса';
+            }
+        }
+
+        function downloadFile() {
+            const content = document.getElementById('fileContent').textContent;
+            const filename = '{{ filename }}';
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

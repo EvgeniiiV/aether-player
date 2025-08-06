@@ -16,6 +16,7 @@
         .icon { margin-right: 15px; font-size: 1.2em; }
         .action-button { margin-left: auto; background: #4a4; border: none; color: white; padding: 8px 12px; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; text-align: center; }
         .action-button.view-button { background-color: #44c; }
+        .action-button.text-button { background-color: #c84; }
         .action-button.playing { background-color: #8a4; }
         #upload-section, #create-folder-section { background-color: #2a2a2a; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
         #now-playing-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #111; padding: 15px; border-top: 1px solid #444; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 10px; }
@@ -107,6 +108,10 @@
                 <span>{{ file }}</span>
                 <!-- ОБНОВЛЕНИЕ: Снова кнопка, а не ссылка -->
                 <button class="action-button view-button" data-filepath="{{ file_path }}">👁️ View</button>
+            {% elif file.lower().endswith(('.txt', '.log', '.nfo', '.md', '.readme', '.info', '.cue', '.m3u', '.pls')) %}
+                <span class="icon">📄</span>
+                <span>{{ file }}</span>
+                <button class="action-button text-button" data-filepath="{{ file_path }}">📖 Читать</button>
             {% else %}
                 {% if file.lower().endswith(('.mkv', '.mp4', '.avi')) %} <span class="icon">🎬</span> {% else %} <span class="icon">🎵</span> {% endif %}
                 <span>{{ file }}</span>

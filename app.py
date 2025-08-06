@@ -127,6 +127,7 @@ def get_file_type(filepath):
     audio_extensions = ['.flac', '.wav', '.wv', '.dsf', '.dff', '.mp3', '.aac', '.ogg', '.m4a']
     video_extensions = ['.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm']
     image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff']
+    text_extensions = ['.txt', '.log', '.nfo', '.md', '.readme', '.info', '.cue', '.m3u', '.pls']
     
     if ext in audio_extensions:
         return 'audio'
@@ -134,6 +135,8 @@ def get_file_type(filepath):
         return 'video'
     elif ext in image_extensions:
         return 'image'
+    elif ext in text_extensions:
+        return 'text'
     else:
         return 'unknown'
 
@@ -687,15 +690,75 @@ def browse(subpath=""):
     files = sorted([i for i in items if os.path.isfile(os.path.join(current_path, i))])
     parent_path = os.path.dirname(subpath) if subpath else None
     
+    # Добавляем информацию о типах файлов
+    files_with_types = []
+    for file in files:
+        file_path = os.path.join(current_path, file)
+        file_type = get_file_type(file_path)
+        files_with_types.append({
+            'name': file,
+            'type': file_type
+        })
+    
     return render_template("index.html", 
                          current_subpath=subpath, 
                          folders=folders, 
-                         files=files, 
+                         files_with_types=files_with_types,
+                         files=files,  # Оставляем для обратной совместимости
                          parent_path=parent_path)
 
 @app.route('/media/<path:filepath>')
 def media_file(filepath):
     return send_from_directory(MEDIA_ROOT, filepath)
+
+@app.route('/view_text/<path:filepath>')
+def view_text(filepath):
+    """Просмотр текстового файла"""
+    full_path = os.path.join(MEDIA_ROOT, filepath)
+    
+    # Проверка безопасности пути
+    if not os.path.realpath(full_path).startswith(os.path.realpath(MEDIA_ROOT)):
+        abort(403)
+    
+    if not os.path.isfile(full_path):
+        abort(404)
+    
+    # Проверим, что это действительно текстовый файл
+    file_type = get_file_type(full_path)
+    if file_type != 'text':
+        abort(400, "Файл не является текстовым")
+    
+    try:
+        # Пытаемся прочитать файл с разными кодировками
+        encodings = ['utf-8', 'cp1251', 'iso-8859-1', 'ascii']
+        content = None
+        used_encoding = None
+        
+        for encoding in encodings:
+            try:
+                with open(full_path, 'r', encoding=encoding) as f:
+                    content = f.read()
+                    used_encoding = encoding
+                    break
+            except UnicodeDecodeError:
+                continue
+        
+        if content is None:
+            # Если не удалось прочитать как текст, попробуем как бинарный
+            with open(full_path, 'rb') as f:
+                raw_content = f.read()
+                content = raw_content.decode('utf-8', errors='replace')
+                used_encoding = 'utf-8 (с заменой ошибок)'
+        
+        return render_template("text_viewer.html", 
+                             filepath=filepath,
+                             filename=os.path.basename(filepath),
+                             content=content,
+                             encoding=used_encoding,
+                             parent_path=os.path.dirname(filepath) if os.path.dirname(filepath) else None)
+        
+    except Exception as e:
+        return f"Ошибка чтения файла: {str(e)}", 500
 
 @app.route('/get_status')
 def get_status():

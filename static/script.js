@@ -373,17 +373,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Кнопки просмотра изображений
+        // Кнопки просмотра изображений
     document.querySelectorAll('.view-button').forEach(button => {
         button.addEventListener('click', function() {
             const filepath = this.dataset.filepath;
             console.log("[ACTION] Просмотр изображения:", filepath);
-            window.open(`/media/${filepath}`, '_blank');
-            fetch('/view_image', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: `filepath=${encodeURIComponent(filepath)}`
-            });
+            window.open(`/media/${encodeURIComponent(filepath)}`, '_blank');
+        });
+    });
+
+    // Кнопки чтения текстовых файлов
+    document.querySelectorAll('.text-button').forEach(button => {
+        button.addEventListener('click', function() {
+            const filepath = this.dataset.filepath;
+            console.log("[ACTION] Просмотр текстового файла:", filepath);
+            window.open(`/view_text/${encodeURIComponent(filepath)}`, '_blank');
         });
     });
 
