@@ -78,6 +78,26 @@ class PowerControl:
                 print(f"УСПЕХ: GPIO включен")
                 print(f"GPIO {self.gpio_pin} = HIGH (3.3V)")
                 print("💡 Для реле 5В нужна оптопара для усиления сигнала")
+                
+                # НОВОЕ: Ждем готовности HDD после включения питания
+                print("⏳ Ожидание готовности HDD после включения питания...")
+                hdd_ready = False
+                for attempt in range(15):  # 30 секунд максимум
+                    try:
+                        result = subprocess.run(['lsblk'], capture_output=True, text=True, timeout=3)
+                        if 'sda2' in result.stdout:
+                            print(f"✅ HDD готов к работе (обнаружен через {(attempt+1)*2} секунд)")
+                            hdd_ready = True
+                            break
+                    except:
+                        pass
+                    print(f"   Попытка {attempt+1}/15: HDD еще не готов...")
+                    time.sleep(2)
+                
+                if not hdd_ready:
+                    print("⚠️ HDD не обнаружен за 30 секунд, но питание включено")
+                    print("   Возможно потребуется ручное монтирование")
+                
                 self.save_status()
                 self.log_event("GPIO включен (требует оптопары для реле 5В)")
                 return True
@@ -161,41 +181,34 @@ class PowerControl:
             return None
     
     def safe_power_off(self):
-        """Безопасное выключение с отмонтированием USB"""
+        """Безопасное выключение с финальной проверкой отмонтирования"""
         print("=== Безопасное выключение ===")
         
-        # Останавливаем Aether Player
-        print("Останавливаем Aether Player...")
-        try:
-            subprocess.run(["sudo", "pkill", "-f", "python.*app"], 
-                         timeout=5, capture_output=True)
-            subprocess.run(["sudo", "pkill", "-f", "mpv"], 
-                         timeout=5, capture_output=True)
-            time.sleep(2)
-        except subprocess.TimeoutExpired:
-            print("Таймаут остановки процессов")
-        except Exception as e:
-            print(f"Ошибка остановки процессов: {e}")
-        
-        # Отмонтируем USB накопители
-        print("Отмонтирование USB накопителей...")
+        # Проверяем, остались ли примонтированные USB накопители
+        print("Финальная проверка USB накопителей...")
         try:
             result = subprocess.run(["mount"], capture_output=True, text=True)
             usb_mounts = [line.split()[0] for line in result.stdout.split('\n') 
                          if '/dev/sd' in line]
             
             if usb_mounts:
+                print("⚠️  Обнаружены неотмонтированные USB накопители")
                 for device in usb_mounts:
-                    print(f"Отмонтирование {device}...")
-                    subprocess.run(["sudo", "umount", device], 
-                                 timeout=10, capture_output=True)
+                    print(f"📱 Принудительное отмонтирование {device}...")
+                    try:
+                        subprocess.run(["sudo", "umount", device], 
+                                     timeout=10, capture_output=True)
+                    except Exception:
+                        # Принудительное отмонтирование
+                        subprocess.run(["sudo", "umount", "-f", device], 
+                                     timeout=10, capture_output=True)
                 
                 # Синхронизация
                 subprocess.run(["sync"], timeout=5)
                 time.sleep(2)
-                print("USB накопители отмонтированы")
+                print("✅ USB накопители отмонтированы")
             else:
-                print("USB накопители не найдены")
+                print("✅ USB накопители уже отмонтированы")
                 
         except Exception as e:
             print(f"Ошибка отмонтирования: {e}")
