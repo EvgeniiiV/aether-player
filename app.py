@@ -120,7 +120,7 @@ else:
 
 MEDIA_ROOT = "/mnt/hdd"
 MPV_SOCKET = "/tmp/mpv_socket"
-MEDIA_EXTENSIONS = ['.flac', '.wav', '.wv', '.dsf', '.dff', '.mp3', '.aac', '.ogg', '.m4a', 
+MEDIA_EXTENSIONS = ['.flac', '.wav', '.wv', '.ape', '.dsf', '.dff', '.mp3', '.aac', '.ogg', '.m4a', 
                    '.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', 
                    '.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff']
 
@@ -161,7 +161,7 @@ def get_file_type(filepath):
     """Определяет тип медиафайла"""
     ext = os.path.splitext(filepath)[1].lower()
     
-    audio_extensions = ['.flac', '.wav', '.wv', '.dsf', '.dff', '.mp3', '.aac', '.ogg', '.m4a']
+    audio_extensions = ['.flac', '.wav', '.wv', '.ape', '.dsf', '.dff', '.mp3', '.aac', '.ogg', '.m4a']
     video_extensions = ['.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm']
     image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff']
     text_extensions = ['.txt', '.log', '.nfo', '.md', '.readme', '.info', '.cue', '.m3u', '.pls']

@@ -25,6 +25,7 @@ class AudioEnhancement:
             'description': 'Легкое расширение стереосцены',
             'filters': [
                 'crossfeed=strength=0.5:range=0.7',
+                'volume=1.1',  # Компенсация громкости для кроссфида
                 'extrastereo=m=1.6'
             ]
         },
@@ -33,6 +34,7 @@ class AudioEnhancement:
             'description': 'Имитация акустики комнаты',
             'filters': [
                 'crossfeed=strength=0.5:range=0.6',
+                'volume=1.1',  # Компенсация громкости для кроссфида
                 'haas=level_in=1.0:level_out=1.0:side_gain=0.8',
                 'extrastereo=m=1.5'
             ]
@@ -42,6 +44,7 @@ class AudioEnhancement:
             'description': 'Максимальное расширение стереосцены',
             'filters': [
                 'crossfeed=strength=0.7:range=0.4',
+                'volume=1.15',  # Больше компенсации для сильного кроссфида
                 'haas=level_in=1.0:level_out=1.2:side_gain=1.0',
                 'extrastereo=m=2.0',
                 'surround=chl_out=stereo:chl_in=stereo:level_in=1.0:level_out=1.1'
@@ -92,14 +95,24 @@ class AudioEnhancement:
         filters = []
         
         # Crossfeed (кроссфид) - основа виртуальной стереосцены
-        crossfeed = f"crossfeed=strength={self.custom_settings['crossfeed_strength']}:range={self.custom_settings['crossfeed_range']}"
+        # Добавляем компенсацию громкости для кроссфида
+        crossfeed_strength = self.custom_settings['crossfeed_strength']
+        crossfeed_range = self.custom_settings['crossfeed_range']
+        crossfeed = f"crossfeed=strength={crossfeed_strength}:range={crossfeed_range}"
         filters.append(crossfeed)
+        
+        # Компенсация громкости для кроссфида (volume boost)
+        # Кроссфид уменьшает громкость на ~10-20%, компенсируем это
+        if crossfeed_strength > 0.1:
+            volume_boost = 1.0 + (crossfeed_strength * 0.2)  # +20% при максимальной силе
+            volume_filter = f"volume={volume_boost}"
+            filters.append(volume_filter)
         
         # Haas effect (эффект Хааса) - временная задержка для создания ширины
         haas = f"haas=level_in=1.0:level_out={self.custom_settings['haas_level_out']}:side_gain={self.custom_settings['haas_side_gain']}"
         filters.append(haas)
         
-        # Extra stereo - усиление стерео-эффекта
+        # Extra stereo - усиление стерeo-эффекта
         extrastereo = f"extrastereo=m={self.custom_settings['extrastereo_multiplier']}"
         filters.append(extrastereo)
         
