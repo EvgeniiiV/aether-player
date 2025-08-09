@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HDD не подключен - Aether Player</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #222;
+            color: #eee;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .warning-container {
+            background: linear-gradient(135deg, #2a2a2a, #1a1a1a);
+            border-radius: 15px;
+            padding: 40px;
+            border: 2px solid #ff6b35;
+            box-shadow: 0 10px 30px rgba(255, 107, 53, 0.3);
+            margin-bottom: 30px;
+        }
+        
+        .warning-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        .warning-title {
+            font-size: 2rem;
+            color: #ff6b35;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        .warning-message {
+            font-size: 1.2rem;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            color: #ccc;
+        }
+        
+        .status-info {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #ff6b35;
+            text-align: left;
+        }
+        
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid #444;
+        }
+        
+        .status-row:last-child {
+            border-bottom: none;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+        
+        .action-button {
+            background: #ff6b35;
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .action-button:hover {
+            background: #e55a2b;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 53, 0.4);
+        }
+        
+        .action-button.secondary {
+            background: #666;
+        }
+        
+        .action-button.secondary:hover {
+            background: #777;
+        }
+        
+        .instructions {
+            background: #1a3a1a;
+            border: 1px solid #4a4;
+            border-radius: 10px;
+            padding: 25px;
+            margin-top: 30px;
+            text-align: left;
+        }
+        
+        .instructions h3 {
+            color: #8f8;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .instructions h3::before {
+            content: "💡";
+            margin-right: 10px;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+        }
+        
+        .instructions li {
+            margin: 10px 0;
+            line-height: 1.5;
+        }
+        
+        .system-info {
+            background: #2a2a4a;
+            border: 1px solid #44a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            text-align: left;
+        }
+        
+        .loading {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .loading.active {
+            display: flex;
+        }
+        
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #666;
+            border-top: 2px solid #ff6b35;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                margin: 20px 10px;
+                padding: 20px;
+            }
+            
+            .warning-container {
+                padding: 30px 20px;
+            }
+            
+            .warning-title {
+                font-size: 1.5rem;
+            }
+            
+            .actions {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="warning-container">
+        <div class="warning-icon">⚠️</div>
+        <div class="warning-title">HDD не подключен</div>
+        <div class="warning-message">
+            Aether Player не может найти внешний жесткий диск с вашей музыкальной коллекцией
+        </div>
+        
+        <div class="status-info">
+            <div class="status-row">
+                <strong>Статус:</strong>
+                <span style="color: #ff6b35;">{{ hdd_status.error if hdd_status.error else 'Не подключен' }}</span>
+            </div>
+            <div class="status-row">
+                <strong>Последняя проверка:</strong>
+                <span>{{ hdd_status.timestamp }}</span>
+            </div>
+            <div class="status-row">
+                <strong>Ожидаемое расположение:</strong>
+                <span>/mnt/hdd</span>
+            </div>
+        </div>
+        
+        <div class="actions">
+            <button class="action-button" onclick="retryMount()">🔄 Повторить подключение</button>
+            <button class="action-button secondary" onclick="checkStatus()">📡 Проверить статус</button>
+            <a href="/system-status" class="action-button secondary">🔧 Системная информация</a>
+        </div>
+        
+        <div class="loading" id="loadingIndicator">
+            <div class="spinner"></div>
+            <span>Выполняется проверка...</span>
+        </div>
+    </div>
+    
+    <div class="instructions">
+        <h3>Что нужно сделать:</h3>
+        <ol>
+            <li><strong>Проверьте физическое подключение</strong> - убедитесь, что USB кабель HDD надежно подключен</li>
+            <li><strong>Проверьте питание</strong> - убедитесь, что внешний HDD получает достаточное питание</li>
+            <li><strong>Включите питание через GPIO</strong> - если используется реле питания, убедитесь что оно включено</li>
+            <li><strong>Подождите</strong> - после подключения HDD может потребоваться несколько секунд для инициализации</li>
+            <li><strong>Нажмите "Повторить подключение"</strong> после устранения проблемы</li>
+        </ol>
+    </div>
+    
+    <div class="system-info">
+        <h3 style="color: #88f; margin-bottom: 15px;">ℹ️ Техническая информация</h3>
+        <p><strong>Ожидается диск:</strong> /dev/sda2</p>
+        <p><strong>Точка монтирования:</strong> /mnt/hdd</p>
+        <p><strong>Сервер работает:</strong> ✅ Да (в режиме ожидания HDD)</p>
+        <p><strong>Интерфейс доступен:</strong> ✅ Да (эта страница загрузилась)</p>
+    </div>
+
+    <script>
+        function showLoading() {
+            document.getElementById('loadingIndicator').classList.add('active');
+        }
+        
+        function hideLoading() {
+            document.getElementById('loadingIndicator').classList.remove('active');
+        }
+        
+        async function retryMount() {
+            showLoading();
+            try {
+                const response = await fetch('/api/retry-hdd-mount');
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ HDD успешно подключен! Страница будет перезагружена.');
+                    window.location.reload();
+                } else {
+                    alert('❌ Не удалось подключить HDD: ' + (data.error || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                alert('❌ Ошибка при попытке подключения: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        async function checkStatus() {
+            showLoading();
+            try {
+                const response = await fetch('/api/hdd-status');
+                const data = await response.json();
+                
+                if (data.connected) {
+                    alert('✅ HDD подключен! Страница будет перезагружена.');
+                    window.location.reload();
+                } else {
+                    alert('⚠️ HDD все еще не подключен.\n\nОшибка: ' + data.error + '\nПоследняя проверка: ' + data.timestamp);
+                }
+            } catch (error) {
+                alert('❌ Ошибка проверки статуса: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        // Автоматическая проверка каждые 30 секунд
+        setInterval(async () => {
+            try {
+                const response = await fetch('/api/hdd-status');
+                const data = await response.json();
+                if (data.connected) {
+                    window.location.reload();
+                }
+            } catch (error) {
+                console.log('Ошибка автопроверки:', error);
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

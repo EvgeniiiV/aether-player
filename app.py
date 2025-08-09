@@ -11,6 +11,7 @@ import os
 import json
 import time  
 import logging
+import subprocess
 try:
     import gevent
     GEVENT_AVAILABLE = True
@@ -119,6 +120,39 @@ MPV_SOCKET = "/tmp/mpv_socket"
 MEDIA_EXTENSIONS = ['.flac', '.wav', '.wv', '.dsf', '.dff', '.mp3', '.aac', '.ogg', '.m4a', 
                    '.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', 
                    '.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff']
+
+def check_hdd_status():
+    """Проверяет статус подключения HDD"""
+    try:
+        # Читаем файл статуса
+        if os.path.exists('/tmp/aether-hdd-status.txt'):
+            with open('/tmp/aether-hdd-status.txt', 'r') as f:
+                lines = f.readlines()
+                if lines and lines[0].strip() == "HDD_CONNECTED":
+                    return {
+                        'connected': True, 
+                        'timestamp': lines[1].strip() if len(lines) > 1 else 'неизвестно',
+                        'mount_point': lines[2].strip() if len(lines) > 2 else '/mnt/hdd'
+                    }
+                elif lines and lines[0].strip() == "HDD_NOT_CONNECTED":
+                    return {
+                        'connected': False,
+                        'timestamp': lines[1].strip() if len(lines) > 1 else 'неизвестно',
+                        'error': 'HDD не подключен или не найден'
+                    }
+        
+        # Если файла статуса нет, проверяем напрямую
+        if os.path.exists(MEDIA_ROOT) and os.path.ismount(MEDIA_ROOT):
+            return {'connected': True, 'timestamp': 'проверено сейчас', 'mount_point': MEDIA_ROOT}
+        else:
+            return {'connected': False, 'timestamp': 'проверено сейчас', 'error': 'HDD не смонтирован'}
+            
+    except Exception as e:
+        return {'connected': False, 'timestamp': 'ошибка проверки', 'error': str(e)}
+
+def is_hdd_available():
+    """Быстрая проверка доступности HDD"""
+    return check_hdd_status()['connected']
 
 def get_file_type(filepath):
     """Определяет тип медиафайла"""
@@ -679,6 +713,15 @@ def audio_settings():
 @app.route("/browse/")
 @app.route("/browse/<path:subpath>")
 def browse(subpath=""):
+    # Проверяем статус HDD
+    hdd_status = check_hdd_status()
+    
+    if not hdd_status['connected']:
+        # HDD не подключен - показываем специальную страницу
+        return render_template("hdd_warning.html", 
+                             hdd_status=hdd_status,
+                             current_subpath=subpath)
+    
     current_path = os.path.join(MEDIA_ROOT, subpath)
     if not os.path.realpath(current_path).startswith(os.path.realpath(MEDIA_ROOT)):
         abort(403)
@@ -759,6 +802,35 @@ def view_text(filepath):
         
     except Exception as e:
         return f"Ошибка чтения файла: {str(e)}", 500
+
+@app.route('/api/hdd-status')
+def get_hdd_status():
+    """API endpoint для проверки статуса HDD"""
+    return jsonify(check_hdd_status())
+
+@app.route('/api/retry-hdd-mount')
+def retry_hdd_mount():
+    """API endpoint для повторной попытки монтирования HDD"""
+    try:
+        # Запускаем скрипт монтирования
+        result = subprocess.run(['/home/eu/aether-player/mount-hdd.sh'], 
+                              capture_output=True, text=True, timeout=60)
+        
+        # Проверяем новый статус
+        new_status = check_hdd_status()
+        
+        return jsonify({
+            'success': new_status['connected'],
+            'status': new_status,
+            'script_output': result.stdout,
+            'script_error': result.stderr
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/get_status')
 def get_status():
