@@ -890,7 +890,8 @@ def get_status():
         'position': round(player_state['position'], 1),
         'duration': round(player_state['duration'], 1),
         'volume': player_state['volume'],
-        'audio_enhancement': player_state.get('audio_enhancement', 'off')
+        'audio_enhancement': player_state.get('audio_enhancement', 'off'),
+        'start_time': player_state.get('start_time')  # Время начала для CUE треков
     })
 
 @app.route("/play", methods=['POST'])
@@ -926,6 +927,14 @@ def play():
     
     # Формируем плейлист только из аудио/видео файлов
     current_dir = os.path.dirname(full_path)
+    logger.info(f"Полный путь: {full_path}")
+    logger.info(f"Директория: {current_dir}")
+    logger.info(f"Директория существует: {os.path.exists(current_dir)}")
+    
+    if not os.path.exists(current_dir):
+        logger.error(f"Директория не найдена: {current_dir}")
+        return jsonify({'status': 'error', 'message': f'Директория не найдена: {os.path.basename(current_dir)}'})
+    
     all_files = os.listdir(current_dir)
     playlist = []
     
@@ -1011,12 +1020,13 @@ def play():
     # Обновляем состояние
     player_state.update({
         'status': 'playing',
-        'track': os.path.basename(full_path),
+        'track': file_subpath,  # Используем относительный путь для правильного сопоставления с UI
         'position': 0.0,
         'duration': raw_duration,
         'volume': user_volume,  # Используем пользовательское значение громкости
         'playlist': playlist,
-        'playlist_index': playlist_index
+        'playlist_index': playlist_index,
+        'start_time': float(start_time) if start_time else None  # Сохраняем время начала для CUE треков
     })
     
     # Обновляем время последнего изменения позиции
@@ -1087,7 +1097,8 @@ def stop():
         'position': 0.0,
         'duration': 0.0,
         'playlist': [],
-        'playlist_index': -1
+        'playlist_index': -1,
+        'start_time': None  # Очищаем время начала
     })
     
     logger.info("воспроизведение остановлено")

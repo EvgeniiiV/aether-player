@@ -15,38 +15,68 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    function setActiveTrackIndicator(trackPath, fromClick = false) {
-        // Сначала пробуем точное совпадение
-        let targetButton = document.querySelector(`.play-button[data-filepath="${trackPath}"]`);
-        
-        if (!targetButton) {
-            // Извлекаем имя файла из пути (без расширения для сравнения)
-            const trackBasename = trackPath.split('/').pop().replace(/\.[^/.]+$/, "");
-            
-            // Ищем кнопку, чей путь содержит это имя
+    function setActiveTrackIndicator(trackPath, fromClick = false, startTime = null) {
+        // Очищаем все индикации
+        document.querySelectorAll('.play-button.playing').forEach(button => {
+            button.classList.remove('playing');
+            button.textContent = button.textContent.replace('🎵 Playing', '▶️ Play');
+            if (button.textContent.includes('🎵 Playing')) {
+                button.textContent = button.textContent.replace('🎵 Playing', '▶️ Играть');
+            }
+        });
+
+        let targetButton = null;
+
+        // Если есть время начала, ищем CUE трек с таким же файлом и временем
+        if (startTime !== null) {
             const allButtons = document.querySelectorAll('.play-button');
             allButtons.forEach((btn) => {
-                const btnBasename = btn.dataset.filepath.split('/').pop().replace(/\.[^/.]+$/, "");
-                
-                if (btnBasename.includes(trackBasename) || trackBasename.includes(btnBasename)) {
+                if (btn.dataset.filepath === trackPath && 
+                    btn.dataset.startTime && 
+                    Math.abs(parseFloat(btn.dataset.startTime) - parseFloat(startTime)) < 1) {
                     targetButton = btn;
                 }
             });
         }
         
+        // Если не нашли по времени, ищем точное совпадение файла
         if (!targetButton) {
-            return;
+            targetButton = document.querySelector(`.play-button[data-filepath="${trackPath}"]`);
+            
+            // Если несколько кнопок с одинаковым файлом, берем первую без startTime (обычный файл)
+            if (!targetButton) {
+                const candidates = document.querySelectorAll(`.play-button[data-filepath="${trackPath}"]`);
+                candidates.forEach(btn => {
+                    if (!btn.dataset.startTime && !targetButton) {
+                        targetButton = btn;
+                    }
+                });
+            }
         }
-        
-        // Всегда очищаем все индикации
-        document.querySelectorAll('.play-button.playing').forEach(button => {
-            button.classList.remove('playing');
-            button.textContent = '▶️ Play';
-        });
-        
-        // Устанавливаем индикацию для текущего трека
-        targetButton.classList.add('playing');
-        targetButton.textContent = '🎵 Playing';
+
+        // Fallback: поиск по имени файла
+        if (!targetButton) {
+            const trackBasename = trackPath.split('/').pop().replace(/\.[^/.]+$/, "");
+            const allButtons = document.querySelectorAll('.play-button');
+            allButtons.forEach((btn) => {
+                const btnBasename = btn.dataset.filepath.split('/').pop().replace(/\.[^/.]+$/, "");
+                
+                if (btnBasename.includes(trackBasename) || trackBasename.includes(btnBasename)) {
+                    if (!btn.dataset.startTime && !targetButton) { // Приоритет обычным файлам
+                        targetButton = btn;
+                    }
+                }
+            });
+        }
+
+        if (targetButton) {
+            targetButton.classList.add('playing');
+            if (targetButton.textContent.includes('▶️ Play')) {
+                targetButton.textContent = '🎵 Playing';
+            } else if (targetButton.textContent.includes('▶️ Играть')) {
+                targetButton.textContent = '🎵 Играет';
+            }
+        }
     }
     
     // Детектор проблем и восстановление
@@ -195,7 +225,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Устанавливаем индикацию активного трека ТОЛЬКО если он есть
             if (data.track && data.state === 'playing') {
-                setActiveTrackIndicator(data.track, false);
+                // Передаем start_time из статуса для корректной индикации CUE треков
+                setActiveTrackIndicator(data.track, false, data.start_time);
             }
             
             if (data.state === 'playing') {
@@ -363,8 +394,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const filepath = this.dataset.filepath;
             const startTime = this.dataset.startTime; // Время начала в секундах для CUE-треков
             
-            // Устанавливаем индикацию от клика
-            setActiveTrackIndicator(filepath, true);
+            // Устанавливаем индикацию от клика с передачей времени начала для CUE треков
+            setActiveTrackIndicator(filepath, true, startTime ? parseFloat(startTime) : null);
             
             // Готовим данные для отправки
             let requestBody = `filepath=${encodeURIComponent(filepath)}`;
