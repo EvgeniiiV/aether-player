@@ -91,35 +91,63 @@ class AudioEnhancement:
         return preset['filters']
     
     def _build_custom_filters(self):
-        """Строит пользовательскую цепочку фильтров"""
+        """Построение пользовательских фильтров"""
         filters = []
+        volume_adjustments = []  # Накапливаем корректировки громкости
         
-        # Crossfeed (кроссфид) - основа виртуальной стереосцены
-        # Добавляем компенсацию громкости для кроссфида
+        # Кроссфид
         crossfeed_strength = self.custom_settings['crossfeed_strength']
         crossfeed_range = self.custom_settings['crossfeed_range']
-        crossfeed = f"crossfeed=strength={crossfeed_strength}:range={crossfeed_range}"
-        filters.append(crossfeed)
         
-        # Компенсация громкости для кроссфида (volume boost)
-        # Кроссфид уменьшает громкость на ~10-20%, компенсируем это
-        if crossfeed_strength > 0.1:
-            volume_boost = 1.0 + (crossfeed_strength * 0.2)  # +20% при максимальной силе
-            volume_filter = f"volume={volume_boost}"
-            filters.append(volume_filter)
+        if crossfeed_strength > 0:
+            crossfeed = f"crossfeed=strength={crossfeed_strength}:range={crossfeed_range}"
+            filters.append(crossfeed)
+            
+            # Компенсация громкости при кроссфиде
+            if crossfeed_strength > 0.1:
+                crossfeed_boost = 1.0 + (crossfeed_strength * 0.2)  # +20% при максимальной силе
+                volume_adjustments.append(crossfeed_boost)
         
-        # Haas effect (эффект Хааса) - временная задержка для создания ширины
-        haas = f"haas=level_in=1.0:level_out={self.custom_settings['haas_level_out']}:side_gain={self.custom_settings['haas_side_gain']}"
-        filters.append(haas)
+        # Эффект Хааса (псевдостерео)
+        haas_level_out = self.custom_settings['haas_level_out']
+        haas_side_gain = self.custom_settings['haas_side_gain']
         
-        # Extra stereo - усиление стерeo-эффекта
-        extrastereo = f"extrastereo=m={self.custom_settings['extrastereo_multiplier']}"
-        filters.append(extrastereo)
+        if haas_level_out != 1.0 or haas_side_gain != 1.0:
+            haas = f"haas=level_in=1.0:level_out={haas_level_out}:side_gain={haas_side_gain}"
+            filters.append(haas)
         
-        # Surround upmix - создание объемности
-        if self.custom_settings['surround_level_out'] > 0:
-            surround = f"surround=chl_out=stereo:chl_in=stereo:level_in=1.0:level_out={self.custom_settings['surround_level_out']}"
+        # Экстрастерео (расширение стереосцены)
+        extrastereo_multiplier = self.custom_settings['extrastereo_multiplier']
+        
+        if extrastereo_multiplier != 1.0:
+            extrastereo = f"extrastereo=m={extrastereo_multiplier}"
+            filters.append(extrastereo)
+            
+            # Компенсация громкости для extrastereo
+            # Эмпирически найденная формула: при увеличении множителя громкость растет
+            if extrastereo_multiplier > 1.0:
+                # Финальный коэффициент, найденный экспериментально
+                extrastereo_reduction = 1.0 - ((extrastereo_multiplier - 1.0) * 0.28)  # -28% на каждую единицу выше 1.0
+                volume_adjustments.append(extrastereo_reduction)
+        
+        # Surround (пространственный звук)
+        surround_level_out = self.custom_settings['surround_level_out']
+        
+        if surround_level_out != 1.0:
+            surround = f"surround=chl_out=stereo:chl_in=stereo:level_in=1.0:level_out={surround_level_out}"
             filters.append(surround)
+        
+        # Общая компенсация громкости
+        if volume_adjustments:
+            total_volume = 1.0
+            for adjustment in volume_adjustments:
+                total_volume *= adjustment
+            
+            # Округляем до 3 знаков после запятой для читаемости
+            total_volume = round(total_volume, 3)
+            
+            volume_compensation = f"volume={total_volume}"
+            filters.append(volume_compensation)
         
         return filters
     
