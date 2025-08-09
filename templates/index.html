@@ -121,6 +121,56 @@
         {% endfor %}
     </ul>
 
+    <!-- Секция для CUE-альбомов -->
+    {% if cue_albums %}
+    <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px; border-left: 4px solid #4488ff;">
+        <h3 style="margin-top: 0; color: #4488ff;">🎼 Альбомы (CUE)</h3>
+        {% for album in cue_albums %}
+        <div style="margin-bottom: 15px; padding: 10px; background-color: white; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="font-weight: bold; font-size: 1.1em; color: #333; margin-bottom: 5px;">
+                {{ album.title }}
+            </div>
+            <div style="color: #666; font-size: 0.9em; margin-bottom: 10px;">
+                Исполнитель: {{ album.performer }} | Треков: {{ album.total_tracks }}
+            </div>
+            <div style="margin-bottom: 10px;">
+                <button class="action-button" onclick="toggleTracks('album-{{ loop.index }}')">
+                    📋 Показать треки
+                </button>
+                <button class="action-button play-button" data-filepath="{{ (current_subpath + '/' + album.audio_file) if current_subpath else album.audio_file }}" style="background-color: #28a745;">
+                    ▶️ Воспроизвести весь альбом
+                </button>
+            </div>
+            <div id="album-{{ loop.index }}" style="display: none; margin-top: 10px;">
+                <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 3px;">
+                    {% for track in album.tracks %}
+                    <div style="padding: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                        <div style="flex: 1;">
+                            <span style="font-weight: bold; color: #4488ff; margin-right: 10px;">{{ "%02d"|format(track.number) }}.</span>
+                            <span style="font-weight: 500;">{{ track.title }}</span>
+                            {% if track.performer and track.performer != album.performer %}
+                                <span style="color: #666; font-size: 0.9em;"> - {{ track.performer }}</span>
+                            {% endif %}
+                            {% if track.start_time %}
+                                <span style="color: #888; font-size: 0.8em; margin-left: 10px;">[{{ track.start_time }}]</span>
+                            {% endif %}
+                        </div>
+                        <button class="action-button play-button" 
+                                data-filepath="{{ (current_subpath + '/' + track.file) if current_subpath else track.file }}"
+                                data-start-time="{{ track.relative_time_seconds }}"
+                                data-track-id="cue-{{ loop.index0 }}-{{ track.number }}"
+                                style="background-color: #17a2b8; font-size: 0.8em; padding: 4px 8px;">
+                            ▶️ Играть
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <!-- Секция для загрузки файлов -->
     <div id="upload-section">
         <h4>Загрузить файлы в текущую папку</h4>
@@ -172,6 +222,20 @@
             });
         } catch (e) {
             console.log('SocketIO недоступен, синхронизация отключена');
+        }
+
+        // Функция для показа/скрытия треков альбома
+        function toggleTracks(albumId) {
+            const trackList = document.getElementById(albumId);
+            const button = event.target;
+            
+            if (trackList.style.display === 'none') {
+                trackList.style.display = 'block';
+                button.textContent = '📋 Скрыть треки';
+            } else {
+                trackList.style.display = 'none';
+                button.textContent = '📋 Показать треки';
+            }
         }
     </script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>

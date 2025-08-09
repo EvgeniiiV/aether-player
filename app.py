@@ -23,6 +23,9 @@ from flask import Flask, render_template, request, redirect, url_for, abort, jso
 # Импорт модуля аудио-улучшений
 from audio_enhancement import AudioEnhancement
 
+# Импорт парсера CUE-файлов
+from cue_parser import CueParser
+
 try:
     from flask_socketio import SocketIO
     SOCKETIO_AVAILABLE = True
@@ -173,6 +176,46 @@ def get_file_type(filepath):
         return 'text'
     else:
         return 'unknown'
+
+def get_cue_info_for_folder(folder_path):
+    """Получаем информацию о CUE-файлах в папке"""
+    cue_albums = []
+    
+    if not os.path.exists(folder_path):
+        return cue_albums
+    
+    # Ищем все CUE-файлы в папке
+    cue_files = [f for f in os.listdir(folder_path) 
+                 if f.lower().endswith('.cue') and os.path.isfile(os.path.join(folder_path, f))]
+    
+    for cue_file in cue_files:
+        cue_path = os.path.join(folder_path, cue_file)
+        try:
+            parser = CueParser(cue_path)
+            info = parser.get_info()
+            
+            # Проверяем, существует ли файл с музыкой
+            audio_file_path = None
+            if info['file']:
+                test_path = os.path.join(folder_path, info['file'])
+                if os.path.exists(test_path):
+                    audio_file_path = test_path
+            
+            if audio_file_path and info['tracks']:
+                cue_albums.append({
+                    'cue_file': cue_file,
+                    'audio_file': info['file'],
+                    'audio_file_path': audio_file_path,
+                    'title': info['title'] or os.path.splitext(cue_file)[0],
+                    'performer': info['performer'] or 'Unknown Artist',
+                    'tracks': info['tracks'],
+                    'total_tracks': len(info['tracks'])
+                })
+                
+        except Exception as e:
+            print(f"Ошибка при обработке CUE-файла {cue_file}: {e}")
+    
+    return cue_albums
 
 def get_best_audio_device():
     """Автоматически определяет лучшее доступное аудио устройство"""
@@ -733,6 +776,9 @@ def browse(subpath=""):
     files = sorted([i for i in items if os.path.isfile(os.path.join(current_path, i))])
     parent_path = os.path.dirname(subpath) if subpath else None
     
+    # Ищем CUE-файлы в текущей папке
+    cue_albums = get_cue_info_for_folder(current_path)
+    
     # Добавляем информацию о типах файлов
     files_with_types = []
     for file in files:
@@ -748,6 +794,7 @@ def browse(subpath=""):
                          folders=folders, 
                          files_with_types=files_with_types,
                          files=files,  # Оставляем для обратной совместимости
+                         cue_albums=cue_albums,  # Добавляем CUE-альбомы
                          parent_path=parent_path)
 
 @app.route('/media/<path:filepath>')
@@ -852,7 +899,10 @@ def play():
     global player_state
     
     file_subpath = request.form.get('filepath')
+    start_time = request.form.get('start_time')  # Время начала в секундах для CUE-треков
     logger.info(f"Запрос воспроизведения: {file_subpath}")
+    if start_time:
+        logger.info(f"Время начала: {start_time}s")
     
     full_path = os.path.join(MEDIA_ROOT, file_subpath)
     file_type = get_file_type(full_path)
@@ -895,6 +945,17 @@ def play():
     if mpv_result.get("status") == "error":
         logger.error(f"Ошибка загрузки файла: {mpv_result}")
         return jsonify({'status': 'error', 'message': 'Ошибка загрузки файла'})
+    
+    # Если указано время начала (для CUE-треков), устанавливаем позицию
+    if start_time:
+        try:
+            start_seconds = float(start_time)
+            # Ждем немного, чтобы файл загрузился
+            time.sleep(0.3)
+            mpv_command({"command": ["seek", start_seconds, "absolute"]})
+            logger.info(f"Установлена позиция: {start_seconds}s")
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Некорректное время начала: {start_time}, ошибка: {e}")
     
     # Настройки в зависимости от типа файла
     if file_type == 'video':

@@ -361,14 +361,21 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.play-button').forEach(button => {
         button.addEventListener('click', function() {
             const filepath = this.dataset.filepath;
+            const startTime = this.dataset.startTime; // Время начала в секундах для CUE-треков
             
             // Устанавливаем индикацию от клика
             setActiveTrackIndicator(filepath, true);
             
+            // Готовим данные для отправки
+            let requestBody = `filepath=${encodeURIComponent(filepath)}`;
+            if (startTime) {
+                requestBody += `&start_time=${startTime}`;
+            }
+            
             fetch('/play', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: `filepath=${encodeURIComponent(filepath)}`
+                body: requestBody
             });
         });
     });
