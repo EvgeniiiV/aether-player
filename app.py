@@ -1548,15 +1548,20 @@ def update_custom_audio_enhancement():
     """Обновить пользовательские настройки аудио-улучшений"""
     try:
         settings = request.json.get('settings', {})
+        logger.info(f"🎛️  Получены новые настройки: {settings}")
         
         updated = False
         for setting_name, value in settings.items():
             if audio_enhancer.update_custom_setting(setting_name, value):
+                logger.info(f"✅ Обновлен параметр {setting_name} = {value}")
                 updated = True
+            else:
+                logger.warning(f"❌ Не удалось обновить {setting_name} = {value}")
         
         if updated:
             # Если активна пользовательская предустановка, применяем изменения
             if player_state.get('audio_enhancement') == 'custom':
+                logger.info("🔄 Применяем изменения к custom предустановке")
                 apply_audio_enhancement('custom')
             
             return jsonify({
