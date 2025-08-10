@@ -48,6 +48,16 @@ aether-player.error.log
 .Spotlight-V100
 .Trashes
 ehthumbs.db
+
+# Temporary test files (to prevent VS Code extensions from creating empty files)
+test_*.py
+test_*.sh
+*_test.py
+*_test.sh
+crossfeed_*.sh
+diagnose-*.sh
+gpio-test*.sh
+final_*_test.sh
 Thumbs.db
 
 # Media files (если не хотите загружать тестовые медиа файлы)
