@@ -12,11 +12,6 @@ import json
 import time  
 import logging
 import subprocess
-try:
-    import gevent
-    GEVENT_AVAILABLE = True
-except ImportError:
-    GEVENT_AVAILABLE = False
 import multiprocessing
 from flask import Flask, render_template, request, redirect, url_for, abort, jsonify, send_from_directory
 
