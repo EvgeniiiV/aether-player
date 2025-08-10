@@ -519,6 +519,22 @@ def ensure_mpv_is_running():
         enhancement_preset = player_state.get('audio_enhancement', 'off')
         af_string = audio_enhancer.get_mpv_af_string(enhancement_preset)
         
+        # Проверяем доступность дисплея
+        display_available = False
+        try:
+            # Проверяем переменную DISPLAY
+            display_available = os.environ.get('DISPLAY') is not None
+            if not display_available:
+                # Для Raspberry Pi проверяем vcgencmd
+                result = subprocess.run(['vcgencmd', 'get_lcd_info'], 
+                                      capture_output=True, text=True, timeout=2)
+                display_available = "no display" not in result.stdout.lower()
+        except:
+            pass
+        
+        # Выбираем видео драйвер
+        vo_driver = "gpu" if display_available else "null"
+        
         # ВАЖНО: НЕ КОММЕНТИРОВАТЬ --audio-device! 
         # Эта строка обеспечивает направление звука на правильное устройство.
         # Если звука нет - проблема в номере карты, а не в этом параметре!
@@ -529,8 +545,10 @@ def ensure_mpv_is_running():
             f"--audio-device={audio_device}",  # ⚠️ КРИТИЧЕСКИ ВАЖНО - НЕ УДАЛЯТЬ!
             f"--volume={safe_startup_volume}", # Безопасная стартовая громкость
             "--softvol-max=200",               # Максимальная программная громкость 200% для плавной регулировки
-            "--vo=gpu",                        # Видео вывод через GPU для HDMI
-            "--hwdec=auto",                    # Аппаратное декодирование видео
+            f"--vo={vo_driver}",               # Видео вывод: gpu или null (headless)
+            "--hwdec=auto-safe",               # Безопасное аппаратное декодирование (fallback на софт)
+            "--vd-lavc-skiploopfilter=all",    # Пропускаем loop filter для проблемных файлов
+            "--vd-lavc-fast",                  # Быстрое декодирование для совместимости
             # Аудио форматы - КРИТИЧЕСКИ ВАЖНО для Scarlett 2i2
             "--audio-format=s32",              # Принудительно используем S32 формат для Scarlett 2i2
             "--audio-channels=2",              # Стерео режим
@@ -546,6 +564,8 @@ def ensure_mpv_is_running():
             logger.info(f"🎵 Применены аудиофильтры: {af_string}")
         else:
             logger.info("🎵 Аудиофильтры отключены")
+        
+        logger.info(f"🖥️  Видеодрайвер: --vo={vo_driver} (дисплей {'доступен' if display_available else 'недоступен'})")
         
         # Простой запуск MPV без изоляции - исправление проблемы запуска
         try:
