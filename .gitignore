@@ -96,3 +96,11 @@ cleanup-vscode-junk.sh
 
 # Autostart logs
 autostart.log
+
+# Temporary documentation and logs
+ADDITIONAL_FIXES_*.md
+EXPLORATION_INDEX.md
+FIXES_*.md
+PROJECT_ANALYSIS.md
+QUICK_REFERENCE.md
+log.txt
