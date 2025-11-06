@@ -430,18 +430,18 @@
                         <div class="control-icon">🔄</div>
                         <div class="control-title">Перезагрузка</div>
                     </div>
-                    <p class="control-description">Перезагружает Raspberry Pi через 1 минуту</p>
+                    <p class="control-description">Перезагружает Raspberry Pi</p>
                     <button class="control-btn reboot-btn" onclick="systemAction('reboot')">
                         🔄 Перезагрузить
                     </button>
                 </div>
-                
+
                                 <div class="control-card shutdown">
                     <div class="control-header">
                         <div class="control-icon">⚡</div>
                         <div class="control-title">Выключение</div>
                     </div>
-                    <p class="control-description">Безопасно выключает Raspberry Pi через 1 минуту</p>
+                    <p class="control-description">Безопасно выключает Raspberry Pi</p>
                     <button class="control-btn shutdown-btn" onclick="systemAction('shutdown')">
                         ⚡ Выключить
                     </button>
@@ -516,8 +516,8 @@
         // Функции управления системой
         function systemAction(action) {
             const messages = {
-                'shutdown': 'Вы уверены, что хотите выключить Raspberry Pi?\n\nСистема будет выключена через 1 минуту.',
-                'reboot': 'Вы уверены, что хотите перезагрузить Raspberry Pi?\n\nСистема будет перезагружена через 1 минуту.',
+                'shutdown': 'Вы уверены, что хотите выключить Raspberry Pi?',
+                'reboot': 'Вы уверены, что хотите перезагрузить Raspberry Pi?',
                 'umount_hdd': 'Отключить внешний жесткий диск?\n\nВсе данные будут синхронизированы.'
             };
             
@@ -541,10 +541,6 @@
             .then(data => {
                 if (data.status === 'ok') {
                     alert('✅ ' + data.message);
-                    if (action === 'shutdown' || action === 'reboot') {
-                        // Показываем обратный отсчет
-                        showCountdown(action === 'shutdown' ? 'выключения' : 'перезагрузки');
-                    }
                 } else {
                     alert('❌ Ошибка: ' + data.message);
                 }
@@ -585,57 +581,7 @@
                 button.textContent = originalText;
             });
         }
-        
-        function showCountdown(action) {
-            const countdownDiv = document.createElement('div');
-            countdownDiv.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: linear-gradient(135deg, #f56565, #e53e3e);
-                color: white;
-                padding: 20px;
-                border-radius: 10px;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-                z-index: 9999;
-                font-weight: bold;
-                text-align: center;
-                min-width: 250px;
-            `;
-            
-            document.body.appendChild(countdownDiv);
-            
-            let seconds = 60;
-            const interval = setInterval(() => {
-                const minutes = Math.floor(seconds / 60);
-                const secs = seconds % 60;
-                countdownDiv.innerHTML = `
-                    <div style="font-size: 1.2em; margin-bottom: 10px;">
-                        ⏰ ${action.charAt(0).toUpperCase() + action.slice(1)} через:
-                    </div>
-                    <div style="font-size: 2em; color: #fff3cd;">
-                        ${minutes}:${secs.toString().padStart(2, '0')}
-                    </div>
-                    <div style="margin-top: 10px; font-size: 0.9em;">
-                        <button onclick="cancelShutdown()" style="
-                            background: rgba(255,255,255,0.2);
-                            border: 1px solid rgba(255,255,255,0.3);
-                            color: white;
-                            padding: 5px 15px;
-                            border-radius: 5px;
-                            cursor: pointer;
-                        ">Отменить</button>
-                    </div>
-                `;
-                
-                seconds--;
-                if (seconds < 0) {
-                    clearInterval(interval);
-                    countdownDiv.remove();
-                }
-            }, 1000);
-        }
-        
+
         function createReportAndRefresh() {
             const button = event.target;
             const originalText = button.textContent;

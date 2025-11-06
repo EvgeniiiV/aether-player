@@ -11,71 +11,71 @@ document.addEventListener('DOMContentLoaded', () => {
     function clearActiveTrackIndicators() {
         document.querySelectorAll('.play-button.playing').forEach(button => {
             button.classList.remove('playing');
-            button.textContent = '▶️ Play';
         });
     }
-    
+
     function setActiveTrackIndicator(trackPath, fromClick = false, startTime = null) {
-        // Очищаем все индикации
-        document.querySelectorAll('.play-button.playing').forEach(button => {
-            button.classList.remove('playing');
-            button.textContent = button.textContent.replace('🎵 Playing', '▶️ Play');
-            if (button.textContent.includes('🎵 Playing')) {
-                button.textContent = button.textContent.replace('🎵 Playing', '▶️ Играть');
-            }
-        });
+        console.log('[INDICATOR] setActiveTrackIndicator:', trackPath, 'startTime:', startTime);
 
         let targetButton = null;
 
-        // Если есть время начала, ищем CUE трек с таким же файлом и временем
+        // Если есть время начала, ищем ТОЛЬКО CUE трек с таким же файлом и временем
         if (startTime !== null) {
+            console.log('[INDICATOR] CUE mode - searching for track with startTime:', startTime);
             const allButtons = document.querySelectorAll('.play-button');
             allButtons.forEach((btn) => {
-                if (btn.dataset.filepath === trackPath && 
-                    btn.dataset.startTime && 
+                if (btn.dataset.filepath === trackPath &&
+                    btn.dataset.startTime &&
                     Math.abs(parseFloat(btn.dataset.startTime) - parseFloat(startTime)) < 1) {
                     targetButton = btn;
+                    console.log('[INDICATOR] Found matching CUE track button');
                 }
             });
-        }
-        
-        // Если не нашли по времени, ищем точное совпадение файла
-        if (!targetButton) {
-            targetButton = document.querySelector(`.play-button[data-filepath="${trackPath}"]`);
-            
-            // Если несколько кнопок с одинаковым файлом, берем первую без startTime (обычный файл)
+
             if (!targetButton) {
-                const candidates = document.querySelectorAll(`.play-button[data-filepath="${trackPath}"]`);
-                candidates.forEach(btn => {
-                    if (!btn.dataset.startTime && !targetButton) {
-                        targetButton = btn;
+                console.log('[INDICATOR] CUE track button NOT found - skipping indicator (strict mode)');
+                return; // Не устанавливаем индикацию, если не нашли конкретный CUE трек
+            }
+        } else {
+            console.log('[INDICATOR] Normal mode - searching for file without startTime');
+            // Для обычных файлов ищем кнопку БЕЗ startTime
+            const candidates = document.querySelectorAll(`.play-button[data-filepath="${trackPath}"]`);
+            candidates.forEach(btn => {
+                if (!btn.dataset.startTime && !targetButton) {
+                    targetButton = btn;
+                    console.log('[INDICATOR] Found exact match button without startTime');
+                }
+            });
+
+            // Fallback: поиск по имени файла ТОЛЬКО для обычных файлов (не CUE)
+            if (!targetButton) {
+                console.log('[INDICATOR] Exact match not found, trying basename fallback');
+                const trackBasename = trackPath.split('/').pop().replace(/\.[^/.]+$/, "");
+                const allButtons = document.querySelectorAll('.play-button');
+                allButtons.forEach((btn) => {
+                    const btnBasename = btn.dataset.filepath.split('/').pop().replace(/\.[^/.]+$/, "");
+                    if (btnBasename.includes(trackBasename) || trackBasename.includes(btnBasename)) {
+                        if (!btn.dataset.startTime && !targetButton) {
+                            targetButton = btn;
+                            console.log('[INDICATOR] Found button via basename fallback');
+                        }
                     }
                 });
             }
         }
 
-        // Fallback: поиск по имени файла
-        if (!targetButton) {
-            const trackBasename = trackPath.split('/').pop().replace(/\.[^/.]+$/, "");
-            const allButtons = document.querySelectorAll('.play-button');
-            allButtons.forEach((btn) => {
-                const btnBasename = btn.dataset.filepath.split('/').pop().replace(/\.[^/.]+$/, "");
-                
-                if (btnBasename.includes(trackBasename) || trackBasename.includes(btnBasename)) {
-                    if (!btn.dataset.startTime && !targetButton) { // Приоритет обычным файлам
-                        targetButton = btn;
-                    }
-                }
-            });
-        }
+        // Очищаем ВСЕ кнопки
+        console.log('[INDICATOR] Clearing all button states');
+        document.querySelectorAll('.play-button').forEach(button => {
+            button.classList.remove('playing');
+        });
 
+        // Устанавливаем индикацию на целевую кнопку
         if (targetButton) {
+            console.log('[INDICATOR] Setting active state on target button');
             targetButton.classList.add('playing');
-            if (targetButton.textContent.includes('▶️ Play')) {
-                targetButton.textContent = '🎵 Playing';
-            } else if (targetButton.textContent.includes('▶️ Играть')) {
-                targetButton.textContent = '🎵 Играет';
-            }
+        } else {
+            console.log('[INDICATOR] No target button found');
         }
     }
     
@@ -205,10 +205,10 @@ document.addEventListener('DOMContentLoaded', () => {
             nowPlayingInfo.innerHTML = '<strong>Статус:</strong> Остановлено';
             playPauseButton.textContent = '▶️';
             nowPlayingInfo.classList.remove('playing-indicator');
-            
-            // Убираем индикацию активного трека
+
+            // Убираем индикацию активного трека при остановке
             clearActiveTrackIndicators();
-            
+
             // Сбрасываем прогресс-бар
             progressBar.value = 0;
             progressBar.max = 100;
@@ -216,19 +216,25 @@ document.addEventListener('DOMContentLoaded', () => {
             totalTimeSpan.textContent = "00:00";
         } else {
             const stateText = data.state === 'playing' ? 'Воспроизведение' : 'Пауза';
-            const trackInfo = data.track || 'Нет данных';
-            
-            nowPlayingInfo.innerHTML = `<strong>Статус:</strong> ${stateText}<br><strong>Файл:</strong> ${trackInfo}`;
-            
-            // ИСПРАВЛЕНО: ВСЕГДА очищаем индикаторы перед установкой новых
-            clearActiveTrackIndicators();
-            
-            // Устанавливаем индикацию активного трека ТОЛЬКО если он есть
-            if (data.track && data.state === 'playing') {
-                // Передаем start_time из статуса для корректной индикации CUE треков
-                setActiveTrackIndicator(data.track, false, data.start_time);
+            let trackInfo = data.track || 'Нет данных';
+
+            // Если есть информация о CUE треке, показываем её
+            if (data.cue_track_title) {
+                trackInfo = `${String(data.cue_track_number || '').padStart(2, '0')}. ${data.cue_track_title}`;
+                if (data.cue_track_performer) {
+                    trackInfo += ` - ${data.cue_track_performer}`;
+                }
             }
-            
+
+            nowPlayingInfo.innerHTML = `<strong>Статус:</strong> ${stateText}<br><strong>Трек:</strong> ${trackInfo}`;
+
+            // Устанавливаем индикацию активного трека для playing и paused
+            if (data.track) {
+                // Для CUE треков используем cue_track_start_time, для обычных - start_time
+                const indicatorStartTime = data.cue_track_start_time !== undefined ? data.cue_track_start_time : data.start_time;
+                setActiveTrackIndicator(data.track, false, indicatorStartTime);
+            }
+
             if (data.state === 'playing') {
                 nowPlayingInfo.classList.add('playing-indicator');
                 playPauseButton.textContent = '⏸️';
