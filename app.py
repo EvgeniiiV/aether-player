@@ -9,10 +9,11 @@ except ImportError:
 
 import os
 import json
-import time  
+import time
 import logging
 import subprocess
 import multiprocessing
+import threading
 from flask import Flask, render_template, request, redirect, url_for, abort, jsonify, send_from_directory
 
 # Импорт модуля аудио-улучшений
@@ -406,23 +407,53 @@ player_state = {
     'volume': load_volume_setting(),  # Загружаем сохраненную громкость
     'playlist': [],
     'playlist_index': -1,
-    'audio_enhancement': load_audio_enhancement_setting()  # Загружаем сохраненную предустановку
+    'audio_enhancement': load_audio_enhancement_setting(),  # Загружаем сохраненную предустановку
+    'cue_tracks': None,  # Список треков CUE для текущего файла
+    'current_cue_track': None  # Текущий трек CUE (определяется по позиции)
 }
+
+def get_current_cue_track():
+    """Определяет текущий трек CUE по позиции воспроизведения"""
+    if not player_state.get('cue_tracks'):
+        return None
+
+    current_position = player_state['position']
+    tracks = player_state['cue_tracks']
+
+    # Находим трек, в диапазон которого попадает текущая позиция
+    for i, track in enumerate(tracks):
+        track_start = track.get('relative_time_seconds', 0)
+
+        # Определяем конец трека
+        if i < len(tracks) - 1:
+            track_end = tracks[i + 1].get('relative_time_seconds', 0)
+        else:
+            # Последний трек - до конца файла
+            track_end = player_state['duration']
+
+        if track_start <= current_position < track_end:
+            return track
+
+    return None
 
 def update_position_if_playing():
     """Обновляет позицию если трек играет"""
     global player_state, last_position_update
-    
+
     current_time = time.time()
-    
+
     if player_state['status'] == 'playing':
         time_elapsed = current_time - last_position_update
-        
+
         # Обновляем позицию на основе прошедшего времени
         if time_elapsed >= 0.1:  # Более частые обновления
             player_state['position'] += time_elapsed
             last_position_update = current_time
-            
+
+            # Обновляем текущий трек CUE если есть
+            if player_state.get('cue_tracks'):
+                player_state['current_cue_track'] = get_current_cue_track()
+
             # Проверяем конец трека
             if player_state['position'] >= player_state['duration'] - 0.5:
                 if player_state['playlist'] and player_state['playlist_index'] < len(player_state['playlist']) - 1:
@@ -433,6 +464,20 @@ def update_position_if_playing():
                     player_state['position'] = 0.0
                     player_state['playlist'] = []
                     player_state['playlist_index'] = -1
+
+# Фоновый мониторинг для автопереключения треков
+def background_monitor_thread():
+    """Фоновый поток для мониторинга MPV и автопереключения треков независимо от браузера"""
+    logger.info("🔄 Запущен фоновый мониторинг MPV для автопереключения треков")
+
+    while True:
+        try:
+            # Вызываем update_position_if_playing каждые 0.5 секунды
+            update_position_if_playing()
+            time.sleep(0.5)
+        except Exception as e:
+            logger.error(f"Ошибка в фоновом мониторинге: {e}")
+            time.sleep(1)  # При ошибке ждём дольше
 
 # MPV управление
 def mpv_command(command):
@@ -517,18 +562,32 @@ def ensure_mpv_is_running():
         # Проверяем доступность дисплея
         display_available = False
         try:
-            # Проверяем переменную DISPLAY
-            display_available = os.environ.get('DISPLAY') is not None
-            if not display_available:
-                # Для Raspberry Pi проверяем vcgencmd
-                result = subprocess.run(['vcgencmd', 'get_lcd_info'], 
-                                      capture_output=True, text=True, timeout=2)
-                display_available = "no display" not in result.stdout.lower()
+            # Проверяем переменную DISPLAY (для X11)
+            if os.environ.get('DISPLAY') is not None:
+                display_available = True
+            else:
+                # Для Raspberry Pi проверяем framebuffer
+                if os.path.exists('/dev/fb0'):
+                    try:
+                        # Проверяем доступность framebuffer
+                        result = subprocess.run(['vcgencmd', 'get_lcd_info'],
+                                              capture_output=True, text=True, timeout=2)
+                        display_available = "no display" not in result.stdout.lower()
+                    except:
+                        # Если vcgencmd недоступен, но framebuffer есть - считаем что дисплей есть
+                        display_available = True
         except:
             pass
-        
+
         # Выбираем видео драйвер
-        vo_driver = "gpu" if display_available else "null"
+        # Используем drm для framebuffer, gpu для X11/Wayland
+        if display_available:
+            if os.environ.get('DISPLAY'):
+                vo_driver = "gpu"
+            else:
+                vo_driver = "drm"  # Для framebuffer без X11
+        else:
+            vo_driver = "null"
         
         # ВАЖНО: НЕ КОММЕНТИРОВАТЬ --audio-device! 
         # Эта строка обеспечивает направление звука на правильное устройство.
@@ -685,13 +744,94 @@ def status_update_task():
     """Отключённая фоновая задача"""
     pass
 
+def handle_cue_track_change(direction):
+    """Обработка смены CUE-трека внутри одного файла"""
+    global player_state, last_position_update
+
+    cue_tracks = player_state.get('cue_tracks')
+    if not cue_tracks:
+        return
+
+    current_position = player_state['position']
+    current_cue = player_state.get('current_cue_track')
+
+    # Находим индекс текущего трека
+    current_index = -1
+    for i, track in enumerate(cue_tracks):
+        if current_cue and track.get('number') == current_cue.get('number'):
+            current_index = i
+            break
+
+    # Если не нашли текущий трек, определяем по позиции
+    if current_index == -1:
+        for i, track in enumerate(cue_tracks):
+            track_start = track.get('relative_time_seconds', 0)
+            if i < len(cue_tracks) - 1:
+                track_end = cue_tracks[i + 1].get('relative_time_seconds', 0)
+            else:
+                track_end = player_state['duration']
+
+            if track_start <= current_position < track_end:
+                current_index = i
+                break
+
+    logger.info(f"[CUE NAVIGATION] Текущий индекс трека: {current_index}/{len(cue_tracks)}")
+
+    # Определяем целевой трек
+    if direction == 'next':
+        if current_index < len(cue_tracks) - 1:
+            target_index = current_index + 1
+        else:
+            logger.info("[CUE NAVIGATION] Конец альбома")
+            return
+    elif direction == 'previous':
+        # Если воспроизведение больше 3 секунд от начала трека, перемотать в начало текущего
+        if current_index >= 0:
+            track_start = cue_tracks[current_index].get('relative_time_seconds', 0)
+            if current_position - track_start > 3.0:
+                logger.info(f"[CUE NAVIGATION] Перемотка в начало текущего трека: {track_start}s")
+                mpv_command({"command": ["seek", track_start, "absolute"]})
+                player_state['position'] = track_start
+                player_state['current_cue_track'] = cue_tracks[current_index]
+                last_position_update = time.time()
+                emit_status_update()
+                return
+
+        # Иначе переход к предыдущему треку
+        if current_index > 0:
+            target_index = current_index - 1
+        else:
+            logger.info("[CUE NAVIGATION] Начало альбома")
+            return
+    else:
+        return
+
+    # Перематываем на начало целевого трека
+    target_track = cue_tracks[target_index]
+    target_time = target_track.get('relative_time_seconds', 0)
+
+    logger.info(f"[CUE NAVIGATION] Переход на трек {target_index + 1}: {target_track.get('title')} (время: {target_time}s)")
+
+    mpv_command({"command": ["seek", target_time, "absolute"]})
+    player_state['position'] = target_time
+    player_state['current_cue_track'] = target_track
+    last_position_update = time.time()
+
+    emit_status_update()
+
 def handle_playlist_change(direction):
-    """Обработка смены трека в плейлисте"""
+    """Обработка смены трека в плейлисте или CUE-треках"""
     global player_state
-    
+
+    # Проверяем, воспроизводим ли мы CUE-альбом
+    if player_state.get('cue_tracks'):
+        logger.info(f"[CUE NAVIGATION] Навигация по CUE-трекам: {direction}")
+        handle_cue_track_change(direction)
+        return
+
     if not player_state['playlist']:
         return
-    
+
     current_index = player_state['playlist_index']
     
     if direction == 'next':
@@ -898,16 +1038,59 @@ def retry_hdd_mount():
 def get_status():
     """Возвращает текущий статус плеера"""
     update_position_if_playing()
-    
-    return jsonify({
+
+    position = player_state['position']
+    duration = player_state['duration']
+
+    # Добавляем информацию о текущем CUE треке если есть
+    current_cue = player_state.get('current_cue_track')
+    logger.debug(f"[GET_STATUS] status={player_state['status']}, cue_tracks={player_state.get('cue_tracks') is not None}, current_cue={current_cue is not None}")
+    if current_cue:
+        # Для CUE треков корректируем position и duration
+        track_start = current_cue.get('relative_time_seconds', 0)
+
+        # Определяем конец трека
+        cue_tracks = player_state.get('cue_tracks', [])
+        track_index = None
+        for i, track in enumerate(cue_tracks):
+            if track.get('number') == current_cue.get('number'):
+                track_index = i
+                break
+
+        if track_index is not None:
+            if track_index < len(cue_tracks) - 1:
+                track_end = cue_tracks[track_index + 1].get('relative_time_seconds', 0)
+            else:
+                track_end = player_state['duration']
+
+            # Корректируем position и duration для отображения трека
+            position = position - track_start  # Относительная позиция внутри трека
+            duration = track_end - track_start  # Длительность трека
+
+    response_data = {
         'state': player_state['status'],
         'track': player_state['track'],
-        'position': round(player_state['position'], 1),
-        'duration': round(player_state['duration'], 1),
+        'position': round(position, 1),
+        'duration': round(duration, 1),
         'volume': player_state['volume'],
         'audio_enhancement': player_state.get('audio_enhancement', 'off'),
         'start_time': player_state.get('start_time')  # Время начала для CUE треков
-    })
+    }
+
+    if current_cue:
+        response_data['cue_track_title'] = current_cue.get('title', '')
+        response_data['cue_track_number'] = current_cue.get('number', 0)
+        response_data['cue_track_start_time'] = current_cue.get('relative_time_seconds', 0)
+        response_data['cue_track_performer'] = current_cue.get('performer', '')
+
+    logger.debug(f"[GET_STATUS] Возврат: state={response_data['state']}, pos={response_data['position']}, dur={response_data['duration']}, has_cue_data={'cue_track_number' in response_data}")
+
+    # Запрещаем кэширование статуса
+    response = jsonify(response_data)
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route("/play", methods=['POST'])
 def play():
@@ -970,10 +1153,31 @@ def play():
         logger.error(f"Ошибка загрузки файла: {mpv_result}")
         return jsonify({'status': 'error', 'message': 'Ошибка загрузки файла'})
     
+    # Загружаем информацию о CUE треках если есть CUE файл для этого аудио
+    cue_tracks_info = None
+    audio_dir = os.path.dirname(full_path)
+    audio_filename = os.path.basename(full_path)
+
+    for cue_file in os.listdir(audio_dir):
+        if cue_file.lower().endswith('.cue'):
+            cue_path = os.path.join(audio_dir, cue_file)
+            try:
+                parser = CueParser(cue_path)
+                info = parser.get_info()
+                # Проверяем, что этот CUE файл относится к нашему аудио файлу
+                if info['file'] == audio_filename:
+                    cue_tracks_info = info['tracks']
+                    logger.info(f"📀 Загружен CUE файл: {cue_file}, треков: {len(cue_tracks_info)}")
+                    break
+            except Exception as e:
+                logger.warning(f"Ошибка загрузки CUE файла {cue_file}: {e}")
+
     # Если указано время начала (для CUE-треков), устанавливаем позицию
+    initial_position = 0.0
     if start_time:
         try:
             start_seconds = float(start_time)
+            initial_position = start_seconds
             # Ждем немного, чтобы файл загрузился
             time.sleep(0.3)
             mpv_command({"command": ["seek", start_seconds, "absolute"]})
@@ -1036,12 +1240,14 @@ def play():
     player_state.update({
         'status': 'playing',
         'track': file_subpath,  # Используем относительный путь для правильного сопоставления с UI
-        'position': 0.0,
+        'position': initial_position,  # Устанавливаем начальную позицию (0.0 или start_time для CUE)
         'duration': raw_duration,
         'volume': user_volume,  # Используем пользовательское значение громкости
         'playlist': playlist,
         'playlist_index': playlist_index,
-        'start_time': float(start_time) if start_time else None  # Сохраняем время начала для CUE треков
+        'start_time': float(start_time) if start_time else None,  # Сохраняем время начала для CUE треков
+        'cue_tracks': cue_tracks_info,  # Сохраняем список треков CUE
+        'current_cue_track': None  # Будет определён в update_position_if_playing
     })
     
     # Обновляем время последнего изменения позиции
@@ -1080,6 +1286,9 @@ def toggle_pause():
             if current_position is not None and current_position >= 0:
                 player_state['position'] = float(current_position)
             player_state['status'] = 'paused'
+            # Обновляем текущий трек CUE если есть
+            if player_state.get('cue_tracks'):
+                player_state['current_cue_track'] = get_current_cue_track()
         else:
             # Снятие паузы - обновляем время последнего изменения
             global last_position_update
@@ -1104,7 +1313,12 @@ def stop():
     global player_state
     
     stop_mpv_internal()
-    
+
+    # Сначала очищаем CUE данные явно, чтобы избежать race condition
+    player_state['cue_tracks'] = None
+    player_state['current_cue_track'] = None
+    logger.debug(f"[STOP] После очистки CUE: cue_tracks={player_state.get('cue_tracks')}, current_cue_track={player_state.get('current_cue_track')}")
+
     # Сбрасываем состояние
     player_state.update({
         'status': 'stopped',
@@ -1113,10 +1327,10 @@ def stop():
         'duration': 0.0,
         'playlist': [],
         'playlist_index': -1,
-        'start_time': None  # Очищаем время начала
+        'start_time': None
     })
-    
-    logger.info("воспроизведение остановлено")
+
+    logger.info(f"[STOP] Воспроизведение остановлено. Финальное состояние: cue_tracks={player_state.get('cue_tracks')}, current_cue_track={player_state.get('current_cue_track')}")
     emit_status_update()
     
     return jsonify({'status': 'ok'})
@@ -1125,26 +1339,34 @@ def stop():
 def seek():
     """Перемотка на указанную позицию"""
     global player_state
-    
+
     position = request.form.get('position', type=float)
     if position is None:
         return jsonify({'status': 'error', 'message': 'Позиция не указана'})
-    
+
+    # Для CUE треков конвертируем относительную позицию в абсолютную
+    absolute_position = position
+    current_cue = player_state.get('current_cue_track')
+    if current_cue:
+        track_start = current_cue.get('relative_time_seconds', 0)
+        absolute_position = track_start + position
+        logger.debug(f"CUE seek: относительная {position:.1f}s -> абсолютная {absolute_position:.1f}s")
+
     # Проверяем корректность позиции
-    if position < 0:
-        position = 0
-    if position > player_state['duration']:
-        position = player_state['duration']
-    
-    logger.debug(f"Перемотка на позицию: {position:.1f}")
-    
+    if absolute_position < 0:
+        absolute_position = 0
+    if absolute_position > player_state['duration']:
+        absolute_position = player_state['duration']
+
+    logger.debug(f"Перемотка на позицию: {absolute_position:.1f}")
+
     # Отправляем команду в MPV
-    mpv_result = mpv_command({"command": ["seek", position, "absolute"]})
+    mpv_result = mpv_command({"command": ["seek", absolute_position, "absolute"]})
     if mpv_result.get("status") == "error":
         return jsonify({'status': 'error', 'message': 'Ошибка команды MPV'})
-    
-    # Устанавливаем позицию
-    player_state['position'] = position
+
+    # Устанавливаем абсолютную позицию
+    player_state['position'] = absolute_position
     
     # Обновляем время последнего изменения позиции
     global last_position_update
@@ -1699,6 +1921,12 @@ if socketio:
         logger.info('Клиент подключился')
         emit_status_update()
 
+# Запуск фонового мониторинга при импорте модуля
+# (это нужно для работы с systemd, который не выполняет блок if __name__)
+monitor_thread = threading.Thread(target=background_monitor_thread, daemon=True)
+monitor_thread.start()
+logger.info("🔄 Запущен фоновый мониторинг MPV")
+
 # Запуск сервера
 if __name__ == "__main__":
     logger.info("Запуск Aether Player (простая архитектура)")
@@ -1712,10 +1940,7 @@ if __name__ == "__main__":
     
     # Запускаем MPV
     ensure_mpv_is_running()
-    
-    # Фоновая задача отключена - используем HTTP-механизм обновления
-    # socketio.start_background_task(target=status_update_task)
-    
+
     # Запускаем сервер
     logger.info("Запуск веб-сервера на порту 5000")
     if socketio:

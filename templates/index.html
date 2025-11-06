@@ -6,20 +6,60 @@
     <title>Aether Player</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #222; color: #eee; max-width: 900px; margin: 20px auto; padding-bottom: 150px; }
-        a { color: #8af; text-decoration: none; }
+        /* CSS переменные для тем */
+        :root {
+            --bg-primary: #222;
+            --bg-secondary: #2a2a2a;
+            --bg-hover: #383838;
+            --bg-controls: #111;
+            --text-primary: #eee;
+            --text-secondary: #ccc;
+            --text-link: #8af;
+            --border-color: #444;
+            --cue-track-number: #4488ff;
+            --cue-track-title: #333;
+        }
+
+        body.light-theme {
+            --bg-primary: #f5f5f5;
+            --bg-secondary: #ffffff;
+            --bg-hover: #e8e8e8;
+            --bg-controls: #ffffff;
+            --text-primary: #1a1a1a;
+            --text-secondary: #444;
+            --text-link: #0066cc;
+            --border-color: #ddd;
+            --cue-track-number: #0066cc;
+            --cue-track-title: #1a1a1a;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            max-width: 900px;
+            margin: 20px auto;
+            padding-bottom: 150px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        a { color: var(--text-link); text-decoration: none; }
         a:hover { text-decoration: underline; }
         ul { list-style-type: none; padding-left: 0; }
         li { margin-bottom: 10px; display: flex; align-items: center; padding: 10px; border-radius: 5px; }
-        li:nth-child(odd) { background-color: #2a2a2a; }
-        li:hover { background-color: #383838; }
+        li:nth-child(odd) { background-color: var(--bg-secondary); }
+        li:hover { background-color: var(--bg-hover); }
         .icon { margin-right: 15px; font-size: 1.2em; }
         .action-button { margin-left: auto; background: #4a4; border: none; color: white; padding: 8px 12px; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; text-align: center; }
         .action-button.view-button { background-color: #44c; }
         .action-button.text-button { background-color: #c84; }
-        .action-button.playing { background-color: #8a4; }
-        #upload-section, #create-folder-section { background-color: #2a2a2a; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-        #now-playing-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #111; padding: 15px; border-top: 1px solid #444; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        button.action-button.play-button.playing {
+            background-color: #8a4 !important;
+            box-shadow: 0 0 10px rgba(136, 170, 68, 0.6) !important;
+            border: 2px solid #9b5 !important;
+            font-weight: bold !important;
+        }
+        #upload-section, #create-folder-section { background-color: var(--bg-secondary); padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        #now-playing-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--bg-controls); padding: 15px; border-top: 1px solid var(--border-color); box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 10px; box-shadow: 0 -2px 10px rgba(0,0,0,0.2); transition: background-color 0.3s, border-color 0.3s; }
         .controls { display: flex; gap: 15px; align-items: center; }
         .control-button { background: #44c; border: none; color: white; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 1.2em; }
         #progress-container, #volume-container { width: 80%; max-width: 800px; display: flex; align-items: center; gap: 10px; }
@@ -68,12 +108,39 @@
                 height: 24px;
             }
         }
+        /* Стили для CUE альбомов */
+        .cue-album-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: var(--bg-secondary);
+            border-radius: 5px;
+            border-left: 4px solid var(--cue-track-number);
+            transition: background-color 0.3s;
+        }
+        .cue-album-title {
+            margin-top: 0;
+            color: var(--cue-track-number);
+        }
+        .cue-album-item-title {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: var(--cue-track-title);
+            margin-bottom: 5px;
+        }
+        .cue-track-number {
+            font-weight: bold;
+            color: var(--cue-track-number);
+            margin-right: 10px;
+        }
     </style>
 </head>
 <body>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         <h1>Aether Player</h1>
         <div style="display: flex; gap: 10px;">
+            <button id="theme-toggle" class="control-button" style="background-color: #f59e0b; text-decoration: none; font-size: 0.9em;">
+                🌙 Темная
+            </button>
             <a href="/audio-settings" class="control-button" style="background-color: #6a4c93; text-decoration: none; font-size: 0.9em;">
                 🎵 Настройки аудио
             </a>
@@ -123,11 +190,11 @@
 
     <!-- Секция для CUE-альбомов -->
     {% if cue_albums %}
-    <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px; border-left: 4px solid #4488ff;">
-        <h3 style="margin-top: 0; color: #4488ff;">🎼 Альбомы (CUE)</h3>
+    <div class="cue-album-container">
+        <h3 class="cue-album-title">🎼 Альбомы (CUE)</h3>
         {% for album in cue_albums %}
-        <div style="margin-bottom: 15px; padding: 10px; background-color: white; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div style="font-weight: bold; font-size: 1.1em; color: #333; margin-bottom: 5px;">
+        <div style="margin-bottom: 15px; padding: 10px; background-color: var(--bg-hover); border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div class="cue-album-item-title">
                 {{ album.title }}
             </div>
             <div style="color: #666; font-size: 0.9em; margin-bottom: 10px;">
@@ -144,10 +211,10 @@
             <div id="album-{{ loop.index }}" style="display: none; margin-top: 10px;">
                 <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 3px;">
                     {% for track in album.tracks %}
-                    <div style="padding: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="padding: 8px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                         <div style="flex: 1;">
-                            <span style="font-weight: bold; color: #4488ff; margin-right: 10px;">{{ "%02d"|format(track.number) }}.</span>
-                            <span style="font-weight: 500;">{{ track.title }}</span>
+                            <span class="cue-track-number">{{ "%02d"|format(track.number) }}.</span>
+                            <span style="font-weight: 500; color: var(--text-primary);">{{ track.title }}</span>
                             {% if track.performer and track.performer != album.performer %}
                                 <span style="color: #666; font-size: 0.9em;"> - {{ track.performer }}</span>
                             {% endif %}
@@ -228,7 +295,7 @@
         function toggleTracks(albumId) {
             const trackList = document.getElementById(albumId);
             const button = event.target;
-            
+
             if (trackList.style.display === 'none') {
                 trackList.style.display = 'block';
                 button.textContent = '📋 Скрыть треки';
@@ -237,7 +304,32 @@
                 button.textContent = '📋 Показать треки';
             }
         }
+
+        // Управление темами
+        (function() {
+            const themeToggle = document.getElementById('theme-toggle');
+            const body = document.body;
+
+            // Загружаем сохраненную тему из localStorage
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            if (savedTheme === 'light') {
+                body.classList.add('light-theme');
+                themeToggle.innerHTML = '🌙 Темная';
+            }
+
+            themeToggle.addEventListener('click', function() {
+                body.classList.toggle('light-theme');
+
+                if (body.classList.contains('light-theme')) {
+                    themeToggle.innerHTML = '🌙 Темная';
+                    localStorage.setItem('theme', 'light');
+                } else {
+                    themeToggle.innerHTML = '☀️ Светлая';
+                    localStorage.setItem('theme', 'dark');
+                }
+            });
+        })();
     </script>
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script src="{{ url_for('static', filename='script_new.js') }}"></script>
 </body>
 </html>
