@@ -1150,19 +1150,7 @@ def play():
     # Подготавливаем MPV
     ensure_mpv_is_running()
 
-    # Закрываем просмотр изображений
-    if image_viewer_process:
-        try:
-            image_viewer_process.terminate()
-            image_viewer_process.wait(timeout=2)
-        except:
-            try:
-                image_viewer_process.kill()
-            except:
-                pass
-        image_viewer_process = None
-
-    isolated_run(["sudo", "killall", "fbi"], check=False)  # Закрываем старые fbi процессы
+    # НЕ закрываем изображения при воспроизведении аудио - пусть остаются на экране
     
     # Формируем плейлист только из аудио/видео файлов
     current_dir = os.path.dirname(full_path)
