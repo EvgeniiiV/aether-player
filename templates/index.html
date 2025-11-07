@@ -144,9 +144,9 @@
             <a href="/audio-settings" class="control-button" style="background-color: #6a4c93; text-decoration: none; font-size: 0.9em;">
                 🎵 Настройки аудио
             </a>
-            <a href="/hdmi-display" class="control-button" style="background-color: #9333ea; text-decoration: none; font-size: 0.9em;" target="_blank">
-                📺 Превью HDMI
-            </a>
+            <button id="goto-track-button" class="control-button" style="background-color: #9333ea; text-decoration: none; font-size: 0.9em;">
+                📂 К папке трека
+            </button>
             <a href="/monitor" class="control-button" style="background-color: #667eea; text-decoration: none; font-size: 0.9em;" target="_blank">
                 🔍 Мониторинг
             </a>
@@ -513,6 +513,37 @@
                     })
                     .catch(err => console.error('Ошибка получения состояния:', err));
             }
+        })();
+
+        // Кнопка "К папке трека"
+        (function() {
+            const gotoTrackButton = document.getElementById('goto-track-button');
+
+            gotoTrackButton.addEventListener('click', function() {
+                // Получаем информацию о текущем треке
+                fetch('/api/hdmi-display/state')
+                    .then(r => r.json())
+                    .then(data => {
+                        const track = data.player.track;
+                        if (!track || data.player.status === 'stopped') {
+                            alert('Нет воспроизводимого трека');
+                            return;
+                        }
+
+                        // Извлекаем путь к папке из пути трека
+                        // track формат: "MUSIC/PINK_FLOYD/Pink Floyd - Album/track.dsf"
+                        const pathParts = track.split('/');
+                        pathParts.pop(); // Убираем имя файла
+                        const folderPath = pathParts.join('/');
+
+                        // Переходим к папке
+                        window.location.href = '/browse/' + folderPath;
+                    })
+                    .catch(err => {
+                        console.error('Ошибка получения трека:', err);
+                        alert('Не удалось получить информацию о треке');
+                    });
+            });
         })();
     </script>
     <script src="{{ url_for('static', filename='script_new.js') }}"></script>

@@ -2,7 +2,6 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HDMI Monitor - Aether Player</title>
     <style>
         * {
@@ -12,18 +11,32 @@
         }
 
         html {
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
         }
 
         body {
             font-family: 'Arial', 'Helvetica', sans-serif;
             overflow: hidden;
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             position: fixed;
             top: 0;
             left: 0;
+            right: 0;
+            bottom: 0;
+        }
+
+        /* Скрыть Google Translate и другие overlays */
+        body > iframe,
+        body > div[id*="translate"],
+        body > div[class*="translate"],
+        body > div[id*="google"],
+        body > .skiptranslate {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
         }
 
         /* Темы */
@@ -361,7 +374,7 @@
 
             <!-- Volume -->
             <div id="volume-section">
-                <span>🔊 Громкость:</span>
+                <span>Громкость:</span>
                 <div id="volume-bar">
                     <div id="volume-fill"></div>
                 </div>
@@ -424,16 +437,27 @@
             updateTrackList(state.player);
         }
 
+        let lastImagePath = null;
+
         function updateImage(state) {
             const gallery = state.monitor.image_gallery;
             const index = state.monitor.current_image_index;
 
             if (gallery && gallery.length > 0 && gallery[index]) {
                 const imagePath = gallery[index].replace(/^\/mnt\/hdd/, '/media');
-                document.getElementById('current-image').src = imagePath;
-                document.getElementById('current-image').style.display = 'block';
+
+                // Обновляем только если путь изменился
+                if (imagePath !== lastImagePath) {
+                    const img = document.getElementById('current-image');
+                    // Добавляем timestamp для обхода кэша
+                    img.src = imagePath + '?t=' + Date.now();
+                    img.style.display = 'block';
+                    lastImagePath = imagePath;
+                    console.log('Изображение обновлено:', imagePath, 'Index:', index);
+                }
             } else {
                 document.getElementById('current-image').style.display = 'none';
+                lastImagePath = null;
             }
         }
 
@@ -471,9 +495,18 @@
             const albumDir = player.track.split('/').slice(-2, -1)[0];
             document.getElementById('track-album').textContent = albumDir || '';
 
-            // Technical info (placeholder - need to add metadata endpoint)
-            const ext = track.match(/\.(flac|mp3|wav|ape|wv|dsf|dff|m4a|aac|ogg)$/i);
-            document.getElementById('tech-format').textContent = ext ? ext[1].toUpperCase() : '-';
+            // Technical info from metadata
+            if (player.metadata) {
+                document.getElementById('tech-format').textContent = player.metadata.format || '-';
+                document.getElementById('tech-bitrate').textContent = player.metadata.bitrate || '-';
+                document.getElementById('tech-samplerate').textContent = player.metadata.sample_rate || '-';
+                document.getElementById('tech-channels').textContent = player.metadata.channels || '-';
+            } else {
+                document.getElementById('tech-format').textContent = '-';
+                document.getElementById('tech-bitrate').textContent = '-';
+                document.getElementById('tech-samplerate').textContent = '-';
+                document.getElementById('tech-channels').textContent = '-';
+            }
         }
 
         function updateProgress(position, duration) {
@@ -530,6 +563,12 @@
                 .then(updateUI)
                 .catch(console.error);
         }
+
+        // Force fullscreen
+        document.documentElement.style.width = '100%';
+        document.documentElement.style.height = '100%';
+        document.body.style.width = '100%';
+        document.body.style.height = '100%';
 
         // Auto-refresh
         setInterval(fetchState, 500);

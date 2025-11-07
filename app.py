@@ -1981,6 +1981,56 @@ logger.info("🔄 Запущен фоновый мониторинг MPV")
 # HDMI MONITOR ENDPOINTS
 # ============================================================================
 
+def get_audio_metadata(file_path):
+    """Получить метаданные аудиофайла через ffprobe"""
+    try:
+        cmd = [
+            'ffprobe', '-v', 'quiet', '-print_format', 'json',
+            '-show_format', '-show_streams', file_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+
+            # Ищем аудио стрим
+            audio_stream = None
+            for stream in data.get('streams', []):
+                if stream.get('codec_type') == 'audio':
+                    audio_stream = stream
+                    break
+
+            if audio_stream:
+                sample_rate = audio_stream.get('sample_rate', 'N/A')
+                channels = audio_stream.get('channels', 'N/A')
+                codec = audio_stream.get('codec_name', 'N/A').upper()
+
+                # Битрейт из format или stream
+                bitrate = data.get('format', {}).get('bit_rate')
+                if not bitrate:
+                    bitrate = audio_stream.get('bit_rate')
+
+                if bitrate:
+                    bitrate_kbps = int(bitrate) // 1000
+                    bitrate_str = f"{bitrate_kbps} kbps"
+                else:
+                    bitrate_str = "N/A"
+
+                return {
+                    'format': codec,
+                    'sample_rate': f"{int(sample_rate) // 1000} kHz" if sample_rate != 'N/A' else 'N/A',
+                    'channels': f"{channels} ch" if channels != 'N/A' else 'N/A',
+                    'bitrate': bitrate_str
+                }
+    except Exception as e:
+        logger.error(f"Ошибка получения метаданных: {e}")
+
+    return {
+        'format': 'N/A',
+        'sample_rate': 'N/A',
+        'channels': 'N/A',
+        'bitrate': 'N/A'
+    }
+
 @app.route("/hdmi-display")
 def hdmi_display():
     """Страница HDMI монитора"""
@@ -1990,6 +2040,13 @@ def hdmi_display():
 def get_hdmi_display_state():
     """Получить состояние монитора и плеера"""
     global monitor_state, player_state
+
+    # Получаем метаданные текущего трека
+    metadata = {'format': '-', 'sample_rate': '-', 'channels': '-', 'bitrate': '-'}
+    if player_state['track'] and player_state['status'] != 'stopped':
+        track_path = os.path.join(MEDIA_ROOT, player_state['track'])
+        if os.path.exists(track_path):
+            metadata = get_audio_metadata(track_path)
 
     # Собираем полную информацию
     response = {
@@ -2003,7 +2060,8 @@ def get_hdmi_display_state():
             'playlist': player_state['playlist'],
             'playlist_index': player_state['playlist_index'],
             'cue_tracks': player_state.get('cue_tracks'),
-            'current_cue_track': player_state.get('current_cue_track')
+            'current_cue_track': player_state.get('current_cue_track'),
+            'metadata': metadata
         }
     }
 
