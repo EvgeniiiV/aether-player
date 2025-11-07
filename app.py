@@ -536,9 +536,10 @@ def ensure_mpv_is_running():
                 pass
             player_process = None
         
-        # Завершаем старые процессы
+        # Завершаем только основной MPV процесс с IPC socket, НЕ трогая MPV для изображений
         try:
-            isolated_run(["killall", "mpv"], check=False)
+            # Убиваем только процессы MPV, которые используют наш IPC socket
+            isolated_run(["pkill", "-f", f"input-ipc-server={MPV_SOCKET}"], check=False)
             time.sleep(0.3)
         except:
             pass
@@ -581,12 +582,13 @@ def ensure_mpv_is_running():
             pass
 
         # Выбираем видео драйвер
-        # Используем drm для framebuffer, gpu для X11/Wayland
+        # ВАЖНО: Используем null для headless, чтобы освободить DRM для отображения изображений
+        # DRM будет использоваться только при воспроизведении видео файлов
         if display_available:
             if os.environ.get('DISPLAY'):
                 vo_driver = "gpu"
             else:
-                vo_driver = "drm"  # Для framebuffer без X11
+                vo_driver = "null"  # null вместо drm, чтобы освободить DRM для изображений
         else:
             vo_driver = "null"
         
@@ -1176,6 +1178,17 @@ def play():
         playlist = [full_path]
         playlist_index = 0
     
+    # Переключаем video output в зависимости от типа файла
+    if file_type == 'video':
+        # Для видео включаем DRM output
+        logger.info("🎬 Видео файл - включаем DRM output")
+        mpv_command({"command": ["set_property", "vo", "gpu"]})
+        mpv_command({"command": ["set_property", "gpu-context", "drm"]})
+    else:
+        # Для аудио отключаем video output, чтобы не блокировать DRM для изображений
+        logger.info("🎵 Аудио файл - отключаем video output (vo=null)")
+        mpv_command({"command": ["set_property", "vo", "null"]})
+
     # Загружаем файл в MPV
     mpv_result = mpv_command({"command": ["loadfile", full_path, "replace"]})
     if mpv_result.get("status") == "error":
@@ -1461,12 +1474,13 @@ def view_image():
         # Убиваем старые fbi процессы
         isolated_run(["sudo", "killall", "fbi"], check=False)
 
-        # Запускаем MPV для отображения изображения
+        # Запускаем MPV для отображения изображения с DRM
         from subprocess import DEVNULL, Popen
         command = [
             "mpv",
             "--vo=gpu",
             "--gpu-context=drm",
+            "--loop-file=inf",  # Зацикливаем файл, чтобы не закрывался
             "--image-display-duration=inf",
             "--fullscreen",
             "--no-audio",
