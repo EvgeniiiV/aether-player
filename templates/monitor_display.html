@@ -517,7 +517,7 @@
 
         // Fetch state from API
         function fetchState() {
-            fetch('/api/monitor/state')
+            fetch('/api/hdmi-display/state')
                 .then(r => r.json())
                 .then(updateUI)
                 .catch(console.error);

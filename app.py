@@ -393,6 +393,7 @@ def load_audio_enhancement_setting():
 
 # Глобальные переменные
 player_process = None
+image_viewer_process = None  # Процесс для отображения изображений через MPV на HDMI
 last_position_update = time.time()
 
 # Инициализация модуля аудио-улучшений
@@ -1105,7 +1106,7 @@ def get_status():
 @app.route("/play", methods=['POST'])
 def play():
     """Начать воспроизведение файла"""
-    global player_state, monitor_state
+    global player_state, monitor_state, image_viewer_process
 
     file_subpath = request.form.get('filepath')
     start_time = request.form.get('start_time')  # Время начала в секундах для CUE-треков
@@ -1116,27 +1117,53 @@ def play():
     full_path = os.path.join(MEDIA_ROOT, file_subpath)
     file_type = get_file_type(full_path)
 
-    # Для изображений обновляем монитор (отображается через браузер на HDMI)
+    # Для изображений используем MPV с DRM (работает лучше чем fbi на современных RPi)
     if file_type == 'image':
         logger.info(f"Отображение изображения: {file_subpath}")
 
-        # Получаем директорию с изображением
-        image_dir = os.path.dirname(full_path)
+        # Останавливаем предыдущий просмотр изображений
+        if image_viewer_process:
+            try:
+                image_viewer_process.terminate()
+                image_viewer_process.wait(timeout=2)
+            except:
+                try:
+                    image_viewer_process.kill()
+                except:
+                    pass
+            image_viewer_process = None
 
-        # Обновляем галерею изображений для этой директории
+        # Также убиваем старые процессы fbi (для обратной совместимости)
+        isolated_run(["sudo", "killall", "fbi"], check=False)
+
+        # Используем MPV для отображения изображений с DRM на HDMI
+        from subprocess import DEVNULL, Popen
+        command = [
+            "mpv",
+            "--vo=gpu",
+            "--gpu-context=drm",
+            "--image-display-duration=inf",  # Показывать бесконечно
+            "--fullscreen",
+            "--no-audio",
+            "--quiet",
+            full_path
+        ]
+
+        image_viewer_process = Popen(command, stdout=DEVNULL, stderr=DEVNULL)
+        logger.info(f"✓ Изображение отображено через MPV на HDMI (PID: {image_viewer_process.pid})")
+
+        # Также обновляем состояние для будущего HDMI display
+        image_dir = os.path.dirname(full_path)
         image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')
         monitor_state['image_gallery'] = [
             os.path.join(image_dir, f) for f in sorted(os.listdir(image_dir))
             if f.lower().endswith(image_extensions)
         ]
-
-        # Находим индекс выбранного изображения
         try:
             monitor_state['current_image_index'] = monitor_state['image_gallery'].index(full_path)
         except ValueError:
             monitor_state['current_image_index'] = 0
 
-        logger.info(f"🖼️ Изображение будет отображено на HDMI мониторе: {os.path.basename(full_path)} ({monitor_state['current_image_index'] + 1}/{len(monitor_state['image_gallery'])})")
         return jsonify({'status': 'ok', 'message': 'Изображение отображено'})
     
     # Для аудио и видео используем MPV
@@ -1454,30 +1481,56 @@ def set_volume():
 
 @app.route("/view_image", methods=['POST'])
 def view_image():
-    """Просмотр изображения - обновляет монитор для отображения через браузер"""
-    global monitor_state
+    """Просмотр изображения через MPV на HDMI"""
+    global image_viewer_process, monitor_state
     file_subpath = request.form.get('filepath')
     logger.info(f"Просмотр изображения: {file_subpath}")
 
     full_path = os.path.join(MEDIA_ROOT, file_subpath)
     if os.path.isfile(full_path):
-        # Получаем директорию с изображением
-        image_dir = os.path.dirname(full_path)
+        # Останавливаем предыдущий просмотр
+        if image_viewer_process:
+            try:
+                image_viewer_process.terminate()
+                image_viewer_process.wait(timeout=2)
+            except:
+                try:
+                    image_viewer_process.kill()
+                except:
+                    pass
+            image_viewer_process = None
 
-        # Обновляем галерею изображений для этой директории
+        # Убиваем старые fbi процессы
+        isolated_run(["sudo", "killall", "fbi"], check=False)
+
+        # Запускаем MPV для отображения изображения с DRM на HDMI
+        from subprocess import DEVNULL, Popen
+        command = [
+            "mpv",
+            "--vo=gpu",
+            "--gpu-context=drm",
+            "--loop-file=inf",  # Зацикливаем файл, чтобы не закрывался
+            "--image-display-duration=inf",
+            "--fullscreen",
+            "--no-audio",
+            "--quiet",
+            full_path
+        ]
+
+        image_viewer_process = Popen(command, stdout=DEVNULL, stderr=DEVNULL)
+        logger.info(f"✓ Изображение отображено через MPV на HDMI: {os.path.basename(full_path)} (PID: {image_viewer_process.pid})")
+
+        # Также обновляем состояние для будущего HDMI display (опционально)
+        image_dir = os.path.dirname(full_path)
         image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')
         monitor_state['image_gallery'] = [
             os.path.join(image_dir, f) for f in sorted(os.listdir(image_dir))
             if f.lower().endswith(image_extensions)
         ]
-
-        # Находим индекс выбранного изображения
         try:
             monitor_state['current_image_index'] = monitor_state['image_gallery'].index(full_path)
         except ValueError:
             monitor_state['current_image_index'] = 0
-
-        logger.info(f"🖼️ Изображение будет отображено на HDMI мониторе: {os.path.basename(full_path)} ({monitor_state['current_image_index'] + 1}/{len(monitor_state['image_gallery'])})")
 
     return jsonify({'status': 'ok'})
 
@@ -1549,8 +1602,8 @@ def get_power_status():
         return "Ошибка"
 
 # Маршрут мониторинга системы
-@app.route("/system-monitor")
-def system_monitor_page():
+@app.route("/monitor")
+def monitor_page():
     """Страница мониторинга системы"""
     import subprocess
     import glob
@@ -1988,13 +2041,13 @@ logger.info("🔄 Запущен фоновый мониторинг MPV")
 # HDMI MONITOR ENDPOINTS
 # ============================================================================
 
-@app.route("/monitor")
-def monitor():
+@app.route("/hdmi-display")
+def hdmi_display():
     """Страница HDMI монитора"""
     return render_template("monitor_display.html")
 
-@app.route("/api/monitor/state")
-def get_monitor_state():
+@app.route("/api/hdmi-display/state")
+def get_hdmi_display_state():
     """Получить состояние монитора и плеера"""
     global monitor_state, player_state
 
@@ -2016,36 +2069,36 @@ def get_monitor_state():
 
     return jsonify(response)
 
-@app.route("/api/monitor/set_mode", methods=['POST'])
-def set_monitor_mode():
-    """Установить режим отображения монитора"""
+@app.route("/api/hdmi-display/set_mode", methods=['POST'])
+def set_hdmi_display_mode():
+    """Установить режим отображения HDMI монитора"""
     global monitor_state
     data = request.get_json()
     mode = data.get('mode')
 
     if mode in ['full', 'split', 'info']:
         monitor_state['display_mode'] = mode
-        logger.info(f"🖥️ Режим монитора изменен на: {mode}")
+        logger.info(f"🖥️ Режим HDMI монитора изменен на: {mode}")
         return jsonify({'status': 'ok', 'mode': mode})
 
     return jsonify({'status': 'error', 'message': 'Invalid mode'}), 400
 
-@app.route("/api/monitor/set_theme", methods=['POST'])
-def set_monitor_theme():
-    """Установить тему монитора"""
+@app.route("/api/hdmi-display/set_theme", methods=['POST'])
+def set_hdmi_display_theme():
+    """Установить тему HDMI монитора"""
     global monitor_state
     data = request.get_json()
     theme = data.get('theme')
 
     if theme in ['dark', 'light']:
         monitor_state['theme'] = theme
-        logger.info(f"🎨 Тема монитора изменена на: {theme}")
+        logger.info(f"🎨 Тема HDMI монитора изменена на: {theme}")
         return jsonify({'status': 'ok', 'theme': theme})
 
     return jsonify({'status': 'error', 'message': 'Invalid theme'}), 400
 
-@app.route("/api/monitor/navigate_image", methods=['POST'])
-def navigate_monitor_image():
+@app.route("/api/hdmi-display/navigate_image", methods=['POST'])
+def navigate_hdmi_display_image():
     """Навигация по галерее изображений"""
     global monitor_state
     data = request.get_json()

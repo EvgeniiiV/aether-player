@@ -434,14 +434,14 @@
             // Смена режима отображения HDMI
             document.querySelectorAll('input[name="display-mode"]').forEach(radio => {
                 radio.addEventListener('change', function() {
-                    fetch('/api/monitor/set_mode', {
+                    fetch('/api/hdmi-display/set_mode', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({mode: this.value})
                     })
                     .then(r => r.json())
                     .then(data => {
-                        console.log('Режим монитора изменен:', data);
+                        console.log('Режим HDMI монитора изменен:', data);
                     })
                     .catch(err => console.error('Ошибка смены режима:', err));
                 });
@@ -450,14 +450,14 @@
             // Смена темы HDMI монитора
             document.querySelectorAll('input[name="monitor-theme"]').forEach(radio => {
                 radio.addEventListener('change', function() {
-                    fetch('/api/monitor/set_theme', {
+                    fetch('/api/hdmi-display/set_theme', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({theme: this.value})
                     })
                     .then(r => r.json())
                     .then(data => {
-                        console.log('Тема монитора изменена:', data);
+                        console.log('Тема HDMI монитора изменена:', data);
                     })
                     .catch(err => console.error('Ошибка смены темы:', err));
                 });
@@ -465,7 +465,7 @@
 
             // Навигация по изображениям
             document.getElementById('prev-image').addEventListener('click', function() {
-                fetch('/api/monitor/navigate_image', {
+                fetch('/api/hdmi-display/navigate_image', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({direction: 'prev'})
@@ -479,7 +479,7 @@
             });
 
             document.getElementById('next-image').addEventListener('click', function() {
-                fetch('/api/monitor/navigate_image', {
+                fetch('/api/hdmi-display/navigate_image', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({direction: 'next'})
@@ -494,7 +494,7 @@
 
             // Обновление информации об изображениях
             function updateImageInfo() {
-                fetch('/api/monitor/state')
+                fetch('/api/hdmi-display/state')
                     .then(r => r.json())
                     .then(data => {
                         const gallery = data.monitor.image_gallery;
