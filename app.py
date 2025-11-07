@@ -393,6 +393,7 @@ def load_audio_enhancement_setting():
 
 # Глобальные переменные
 player_process = None
+image_viewer_process = None  # Процесс для отображения изображений через MPV
 last_position_update = time.time()
 
 # Инициализация модуля аудио-улучшений
@@ -1095,8 +1096,8 @@ def get_status():
 @app.route("/play", methods=['POST'])
 def play():
     """Начать воспроизведение файла"""
-    global player_state
-    
+    global player_state, image_viewer_process
+
     file_subpath = request.form.get('filepath')
     start_time = request.form.get('start_time')  # Время начала в секундах для CUE-треков
     logger.info(f"Запрос воспроизведения: {file_subpath}")
@@ -1106,13 +1107,40 @@ def play():
     full_path = os.path.join(MEDIA_ROOT, file_subpath)
     file_type = get_file_type(full_path)
     
-    # Для изображений используем fbi
+    # Для изображений используем MPV с DRM (работает лучше чем fbi на современных RPi)
     if file_type == 'image':
         logger.info(f"Отображение изображения: {file_subpath}")
+
+        # Останавливаем предыдущий просмотр изображений
+        if image_viewer_process:
+            try:
+                image_viewer_process.terminate()
+                image_viewer_process.wait(timeout=2)
+            except:
+                try:
+                    image_viewer_process.kill()
+                except:
+                    pass
+            image_viewer_process = None
+
+        # Также убиваем старые процессы fbi (для обратной совместимости)
         isolated_run(["sudo", "killall", "fbi"], check=False)
-        command = ["sudo", "fbi", "-T", "1", "-a", "--noverbose", full_path]
-        from subprocess import DEVNULL
-        isolated_popen(command, stdout=DEVNULL, stderr=DEVNULL)
+
+        # Используем MPV для отображения изображений с DRM
+        from subprocess import DEVNULL, Popen
+        command = [
+            "mpv",
+            "--vo=gpu",
+            "--gpu-context=drm",
+            "--image-display-duration=inf",  # Показывать бесконечно
+            "--fullscreen",
+            "--no-audio",
+            "--quiet",
+            full_path
+        ]
+
+        image_viewer_process = Popen(command, stdout=DEVNULL, stderr=DEVNULL)
+        logger.info(f"✓ Изображение отображено через MPV (PID: {image_viewer_process.pid})")
         return jsonify({'status': 'ok', 'message': 'Изображение отображено'})
     
     # Для аудио и видео используем MPV
@@ -1121,7 +1149,20 @@ def play():
     
     # Подготавливаем MPV
     ensure_mpv_is_running()
-    isolated_run(["sudo", "killall", "fbi"], check=False)  # Закрываем изображения
+
+    # Закрываем просмотр изображений
+    if image_viewer_process:
+        try:
+            image_viewer_process.terminate()
+            image_viewer_process.wait(timeout=2)
+        except:
+            try:
+                image_viewer_process.kill()
+            except:
+                pass
+        image_viewer_process = None
+
+    isolated_run(["sudo", "killall", "fbi"], check=False)  # Закрываем старые fbi процессы
     
     # Формируем плейлист только из аудио/видео файлов
     current_dir = os.path.dirname(full_path)
@@ -1411,17 +1452,43 @@ def set_volume():
 @app.route("/view_image", methods=['POST'])
 def view_image():
     """Просмотр изображения"""
+    global image_viewer_process
     file_subpath = request.form.get('filepath')
     logger.info(f"Просмотр изображения: {file_subpath}")
-    
+
     full_path = os.path.join(MEDIA_ROOT, file_subpath)
     if os.path.isfile(full_path):
-        command = ["sudo", "fbi", "-T", "1", "-a", "--noverbose", full_path]
+        # Останавливаем предыдущий просмотр
+        if image_viewer_process:
+            try:
+                image_viewer_process.terminate()
+                image_viewer_process.wait(timeout=2)
+            except:
+                try:
+                    image_viewer_process.kill()
+                except:
+                    pass
+            image_viewer_process = None
+
+        # Убиваем старые fbi процессы
         isolated_run(["sudo", "killall", "fbi"], check=False)
-        from subprocess import DEVNULL
-        isolated_popen(command, stdout=DEVNULL, stderr=DEVNULL)
-        logger.info(f"Изображение отображено: {os.path.basename(full_path)}")
-    
+
+        # Запускаем MPV для отображения изображения
+        from subprocess import DEVNULL, Popen
+        command = [
+            "mpv",
+            "--vo=gpu",
+            "--gpu-context=drm",
+            "--image-display-duration=inf",
+            "--fullscreen",
+            "--no-audio",
+            "--quiet",
+            full_path
+        ]
+
+        image_viewer_process = Popen(command, stdout=DEVNULL, stderr=DEVNULL)
+        logger.info(f"✓ Изображение отображено через MPV: {os.path.basename(full_path)} (PID: {image_viewer_process.pid})")
+
     return jsonify({'status': 'ok'})
 
 @app.route('/upload', methods=['POST'])

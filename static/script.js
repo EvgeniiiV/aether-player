@@ -422,6 +422,24 @@ document.addEventListener('DOMContentLoaded', () => {
         button.addEventListener('click', function() {
             const filepath = this.dataset.filepath;
             console.log("[ACTION] Просмотр изображения:", filepath);
+
+            // Отправляем запрос на backend для отображения на HDMI через MPV
+            const formData = new FormData();
+            formData.append('filepath', filepath);
+
+            fetch('/view_image', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log("[ACTION] Изображение отправлено на HDMI:", data);
+            })
+            .catch(error => {
+                console.error("[ERROR] Ошибка отображения изображения:", error);
+            });
+
+            // Также открываем в браузере для предварительного просмотра
             window.open(`/media/${encodeURIComponent(filepath)}`, '_blank');
         });
     });
