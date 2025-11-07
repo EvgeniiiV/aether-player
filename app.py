@@ -413,6 +413,14 @@ player_state = {
     'current_cue_track': None  # Текущий трек CUE (определяется по позиции)
 }
 
+# Состояние монитора HDMI
+monitor_state = {
+    'display_mode': 'split',  # full, split, info
+    'theme': 'dark',  # dark, light
+    'current_image_index': 0,
+    'image_gallery': [],  # Список изображений текущего альбома
+}
+
 def get_current_cue_track():
     """Определяет текущий трек CUE по позиции воспроизведения"""
     if not player_state.get('cue_tracks'):
@@ -1200,6 +1208,15 @@ def play():
     audio_dir = os.path.dirname(full_path)
     audio_filename = os.path.basename(full_path)
 
+    # Обновляем галерею изображений для монитора
+    global monitor_state
+    image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')
+    monitor_state['image_gallery'] = [
+        os.path.join(audio_dir, f) for f in sorted(os.listdir(audio_dir))
+        if f.lower().endswith(image_extensions)
+    ]
+    logger.info(f"🖼️ Обновлена галерея изображений: {len(monitor_state['image_gallery'])} файлов")
+
     for cue_file in os.listdir(audio_dir):
         if cue_file.lower().endswith('.cue'):
             cue_path = os.path.join(audio_dir, cue_file)
@@ -1560,9 +1577,9 @@ def get_power_status():
         logger.error(f"Ошибка получения статуса питания: {e}")
         return "Ошибка"
 
-# Маршрут мониторинга
-@app.route("/monitor")
-def monitor_page():
+# Маршрут мониторинга системы
+@app.route("/system-monitor")
+def system_monitor_page():
     """Страница мониторинга системы"""
     import subprocess
     import glob
@@ -1995,6 +2012,96 @@ if socketio:
 monitor_thread = threading.Thread(target=background_monitor_thread, daemon=True)
 monitor_thread.start()
 logger.info("🔄 Запущен фоновый мониторинг MPV")
+
+# ============================================================================
+# HDMI MONITOR ENDPOINTS
+# ============================================================================
+
+@app.route("/monitor")
+def monitor():
+    """Страница HDMI монитора"""
+    return render_template("monitor_display.html")
+
+@app.route("/api/monitor/state")
+def get_monitor_state():
+    """Получить состояние монитора и плеера"""
+    global monitor_state, player_state
+
+    # Собираем полную информацию
+    response = {
+        'monitor': monitor_state,
+        'player': {
+            'status': player_state['status'],
+            'track': player_state['track'],
+            'position': player_state['position'],
+            'duration': player_state['duration'],
+            'volume': player_state['volume'],
+            'playlist': player_state['playlist'],
+            'playlist_index': player_state['playlist_index'],
+            'cue_tracks': player_state.get('cue_tracks'),
+            'current_cue_track': player_state.get('current_cue_track')
+        }
+    }
+
+    return jsonify(response)
+
+@app.route("/api/monitor/set_mode", methods=['POST'])
+def set_monitor_mode():
+    """Установить режим отображения монитора"""
+    global monitor_state
+    data = request.get_json()
+    mode = data.get('mode')
+
+    if mode in ['full', 'split', 'info']:
+        monitor_state['display_mode'] = mode
+        logger.info(f"🖥️ Режим монитора изменен на: {mode}")
+        return jsonify({'status': 'ok', 'mode': mode})
+
+    return jsonify({'status': 'error', 'message': 'Invalid mode'}), 400
+
+@app.route("/api/monitor/set_theme", methods=['POST'])
+def set_monitor_theme():
+    """Установить тему монитора"""
+    global monitor_state
+    data = request.get_json()
+    theme = data.get('theme')
+
+    if theme in ['dark', 'light']:
+        monitor_state['theme'] = theme
+        logger.info(f"🎨 Тема монитора изменена на: {theme}")
+        return jsonify({'status': 'ok', 'theme': theme})
+
+    return jsonify({'status': 'error', 'message': 'Invalid theme'}), 400
+
+@app.route("/api/monitor/navigate_image", methods=['POST'])
+def navigate_monitor_image():
+    """Навигация по галерее изображений"""
+    global monitor_state
+    data = request.get_json()
+    direction = data.get('direction')  # 'next' or 'prev'
+
+    gallery = monitor_state['image_gallery']
+    if not gallery:
+        return jsonify({'status': 'error', 'message': 'No images in gallery'}), 400
+
+    current_index = monitor_state['current_image_index']
+
+    if direction == 'next':
+        monitor_state['current_image_index'] = (current_index + 1) % len(gallery)
+    elif direction == 'prev':
+        monitor_state['current_image_index'] = (current_index - 1) % len(gallery)
+    else:
+        return jsonify({'status': 'error', 'message': 'Invalid direction'}), 400
+
+    new_image = gallery[monitor_state['current_image_index']]
+    logger.info(f"🖼️ Переключение изображения: {direction} -> {new_image}")
+
+    return jsonify({
+        'status': 'ok',
+        'index': monitor_state['current_image_index'],
+        'image': new_image,
+        'total': len(gallery)
+    })
 
 # Запуск сервера
 if __name__ == "__main__":

@@ -138,13 +138,13 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         <h1>Aether Player</h1>
         <div style="display: flex; gap: 10px;">
-            <button id="theme-toggle" class="control-button" style="background-color: #f59e0b; text-decoration: none; font-size: 0.9em;">
-                🌙 Темная
+            <button id="settings-button" class="control-button" style="background-color: #f59e0b; text-decoration: none; font-size: 0.9em;">
+                ⚙️ Настройки
             </button>
             <a href="/audio-settings" class="control-button" style="background-color: #6a4c93; text-decoration: none; font-size: 0.9em;">
                 🎵 Настройки аудио
             </a>
-            <a href="/monitor" class="control-button" style="background-color: #667eea; text-decoration: none; font-size: 0.9em;">
+            <a href="/monitor" class="control-button" style="background-color: #667eea; text-decoration: none; font-size: 0.9em;" target="_blank">
                 🔍 Мониторинг
             </a>
         </div>
@@ -248,6 +248,86 @@
         <div id="upload-progress-container"></div>
     </div>
 
+    <!-- Модальное окно настроек монитора -->
+    <div id="settings-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center;">
+        <div style="background: var(--bg-secondary); padding: 30px; border-radius: 10px; max-width: 500px; width: 90%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">⚙️ Настройки монитора</h2>
+                <button id="close-settings" style="background: #e74c3c; border: none; color: white; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 1.2em;">✕</button>
+            </div>
+
+            <!-- Тема -->
+            <div style="margin-bottom: 25px;">
+                <h3 style="margin-bottom: 10px;">🎨 Тема интерфейса</h3>
+                <div style="display: flex; gap: 10px;">
+                    <label style="flex: 1; padding: 15px; border: 2px solid var(--border-color); border-radius: 5px; cursor: pointer; text-align: center;">
+                        <input type="radio" name="ui-theme" value="dark" style="margin-right: 5px;">
+                        <span>🌙 Темная</span>
+                    </label>
+                    <label style="flex: 1; padding: 15px; border: 2px solid var(--border-color); border-radius: 5px; cursor: pointer; text-align: center;">
+                        <input type="radio" name="ui-theme" value="light" style="margin-right: 5px;">
+                        <span>☀️ Светлая</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Режим отображения на HDMI -->
+            <div style="margin-bottom: 25px;">
+                <h3 style="margin-bottom: 10px;">🖥️ Режим HDMI монитора</h3>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <label style="padding: 12px; border: 2px solid var(--border-color); border-radius: 5px; cursor: pointer; display: flex; align-items: center;">
+                        <input type="radio" name="display-mode" value="full" style="margin-right: 10px;">
+                        <div>
+                            <div style="font-weight: bold;">🖼️ Полноэкранное изображение</div>
+                            <div style="font-size: 0.85em; opacity: 0.7;">Только картинка на весь экран</div>
+                        </div>
+                    </label>
+                    <label style="padding: 12px; border: 2px solid var(--border-color); border-radius: 5px; cursor: pointer; display: flex; align-items: center;">
+                        <input type="radio" name="display-mode" value="split" style="margin-right: 10px;" checked>
+                        <div>
+                            <div style="font-weight: bold;">📊 Разделенный экран</div>
+                            <div style="font-size: 0.85em; opacity: 0.7;">Изображение + информация о треке</div>
+                        </div>
+                    </label>
+                    <label style="padding: 12px; border: 2px solid var(--border-color); border-radius: 5px; cursor: pointer; display: flex; align-items: center;">
+                        <input type="radio" name="display-mode" value="info" style="margin-right: 10px;">
+                        <div>
+                            <div style="font-weight: bold;">📋 Только информация</div>
+                            <div style="font-size: 0.85em; opacity: 0.7;">Полный экран с деталями воспроизведения</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Тема монитора -->
+            <div style="margin-bottom: 25px;">
+                <h3 style="margin-bottom: 10px;">🎨 Тема HDMI монитора</h3>
+                <div style="display: flex; gap: 10px;">
+                    <label style="flex: 1; padding: 15px; border: 2px solid var(--border-color); border-radius: 5px; cursor: pointer; text-align: center;">
+                        <input type="radio" name="monitor-theme" value="dark" style="margin-right: 5px;" checked>
+                        <span>🌙 Темная</span>
+                    </label>
+                    <label style="flex: 1; padding: 15px; border: 2px solid var(--border-color); border-radius: 5px; cursor: pointer; text-align: center;">
+                        <input type="radio" name="monitor-theme" value="light" style="margin-right: 5px;">
+                        <span>☀️ Светлая</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Навигация по изображениям -->
+            <div style="margin-bottom: 25px;">
+                <h3 style="margin-bottom: 10px;">🖼️ Навигация по изображениям</h3>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button id="prev-image" class="control-button" style="flex: 1; padding: 15px; font-size: 1.1em;">◀️ Предыдущее</button>
+                    <button id="next-image" class="control-button" style="flex: 1; padding: 15px; font-size: 1.1em;">▶️ Следующее</button>
+                </div>
+                <div id="image-info" style="text-align: center; margin-top: 10px; opacity: 0.7; font-size: 0.9em;">
+                    Нет изображений
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ФИНАЛЬНАЯ ПАНЕЛЬ УПРАВЛЕНИЯ -->
     <div id="now-playing-bar">
         <div style="display: flex; justify-content: space-between; width: 100%; max-width: 800px;">
@@ -305,29 +385,131 @@
             }
         }
 
-        // Управление темами
+        // Управление настройками монитора
         (function() {
-            const themeToggle = document.getElementById('theme-toggle');
+            const settingsButton = document.getElementById('settings-button');
+            const settingsModal = document.getElementById('settings-modal');
+            const closeSettings = document.getElementById('close-settings');
             const body = document.body;
 
-            // Загружаем сохраненную тему из localStorage
+            // Загружаем сохраненную тему UI из localStorage
             const savedTheme = localStorage.getItem('theme') || 'dark';
             if (savedTheme === 'light') {
                 body.classList.add('light-theme');
-                themeToggle.innerHTML = '🌙 Темная';
+                document.querySelector('input[name="ui-theme"][value="light"]').checked = true;
+            } else {
+                document.querySelector('input[name="ui-theme"][value="dark"]').checked = true;
             }
 
-            themeToggle.addEventListener('click', function() {
-                body.classList.toggle('light-theme');
+            // Открыть/закрыть модальное окно
+            settingsButton.addEventListener('click', function() {
+                settingsModal.style.display = 'flex';
+                updateImageInfo();
+            });
 
-                if (body.classList.contains('light-theme')) {
-                    themeToggle.innerHTML = '🌙 Темная';
-                    localStorage.setItem('theme', 'light');
-                } else {
-                    themeToggle.innerHTML = '☀️ Светлая';
-                    localStorage.setItem('theme', 'dark');
+            closeSettings.addEventListener('click', function() {
+                settingsModal.style.display = 'none';
+            });
+
+            // Закрыть по клику вне модального окна
+            settingsModal.addEventListener('click', function(e) {
+                if (e.target === settingsModal) {
+                    settingsModal.style.display = 'none';
                 }
             });
+
+            // Смена темы UI
+            document.querySelectorAll('input[name="ui-theme"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    if (this.value === 'light') {
+                        body.classList.add('light-theme');
+                        localStorage.setItem('theme', 'light');
+                    } else {
+                        body.classList.remove('light-theme');
+                        localStorage.setItem('theme', 'dark');
+                    }
+                });
+            });
+
+            // Смена режима отображения HDMI
+            document.querySelectorAll('input[name="display-mode"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    fetch('/api/monitor/set_mode', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({mode: this.value})
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        console.log('Режим монитора изменен:', data);
+                    })
+                    .catch(err => console.error('Ошибка смены режима:', err));
+                });
+            });
+
+            // Смена темы HDMI монитора
+            document.querySelectorAll('input[name="monitor-theme"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    fetch('/api/monitor/set_theme', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({theme: this.value})
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        console.log('Тема монитора изменена:', data);
+                    })
+                    .catch(err => console.error('Ошибка смены темы:', err));
+                });
+            });
+
+            // Навигация по изображениям
+            document.getElementById('prev-image').addEventListener('click', function() {
+                fetch('/api/monitor/navigate_image', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({direction: 'prev'})
+                })
+                .then(r => r.json())
+                .then(data => {
+                    console.log('Переход к предыдущему изображению:', data);
+                    updateImageInfo();
+                })
+                .catch(err => console.error('Ошибка навигации:', err));
+            });
+
+            document.getElementById('next-image').addEventListener('click', function() {
+                fetch('/api/monitor/navigate_image', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({direction: 'next'})
+                })
+                .then(r => r.json())
+                .then(data => {
+                    console.log('Переход к следующему изображению:', data);
+                    updateImageInfo();
+                })
+                .catch(err => console.error('Ошибка навигации:', err));
+            });
+
+            // Обновление информации об изображениях
+            function updateImageInfo() {
+                fetch('/api/monitor/state')
+                    .then(r => r.json())
+                    .then(data => {
+                        const gallery = data.monitor.image_gallery;
+                        const index = data.monitor.current_image_index;
+                        const infoDiv = document.getElementById('image-info');
+
+                        if (gallery && gallery.length > 0) {
+                            const imageName = gallery[index].split('/').pop();
+                            infoDiv.textContent = `${index + 1} / ${gallery.length}: ${imageName}`;
+                        } else {
+                            infoDiv.textContent = 'Нет изображений';
+                        }
+                    })
+                    .catch(err => console.error('Ошибка получения состояния:', err));
+            }
         })();
     </script>
     <script src="{{ url_for('static', filename='script_new.js') }}"></script>

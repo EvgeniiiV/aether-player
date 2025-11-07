@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HDMI Monitor - Aether Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', 'Helvetica', sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* Темы */
+        body.dark {
+            background: #1a1a1a;
+            color: #ffffff;
+        }
+
+        body.light {
+            background: #ffffff;
+            color: #1a1a1a;
+        }
+
+        /* Контейнер */
+        #monitor-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* ===========================
+           FULL IMAGE MODE
+        =========================== */
+        #monitor-container.mode-full #info-panel {
+            display: none;
+        }
+
+        #monitor-container.mode-full #image-panel {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ===========================
+           SPLIT MODE
+        =========================== */
+        #monitor-container.mode-split {
+            display: flex;
+            flex-direction: row;
+        }
+
+        #monitor-container.mode-split #info-panel {
+            width: 50%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 40px;
+        }
+
+        #monitor-container.mode-split #image-panel {
+            width: 50%;
+            height: 100%;
+        }
+
+        /* ===========================
+           INFO-ONLY MODE
+        =========================== */
+        #monitor-container.mode-info #image-panel {
+            display: none;
+        }
+
+        #monitor-container.mode-info #info-panel {
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 60px;
+        }
+
+        /* ===========================
+           IMAGE PANEL
+        =========================== */
+        #image-panel {
+            position: relative;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #image-panel img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        /* ===========================
+           INFO PANEL
+        =========================== */
+        #info-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        .dark #info-panel {
+            background: #1a1a1a;
+            color: #ffffff;
+        }
+
+        .light #info-panel {
+            background: #f5f5f5;
+            color: #1a1a1a;
+        }
+
+        /* Album Cover в Info Mode */
+        .mode-info #album-cover-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .mode-info #album-cover-section img {
+            max-width: 600px;
+            max-height: 600px;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        /* Track Info */
+        #track-info h1 {
+            font-size: 4rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            line-height: 1.2;
+        }
+
+        #track-info .artist {
+            font-size: 3rem;
+            opacity: 0.8;
+            margin-bottom: 10px;
+        }
+
+        #track-info .album {
+            font-size: 2.5rem;
+            opacity: 0.6;
+            margin-bottom: 30px;
+        }
+
+        /* Technical Details */
+        #technical-info {
+            font-size: 1.8rem;
+            opacity: 0.7;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        #technical-info div {
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 5px;
+        }
+
+        .dark #technical-info div {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .light #technical-info div {
+            background: rgba(0,0,0,0.05);
+        }
+
+        /* Progress Bar */
+        #progress-section {
+            margin: 40px 0;
+        }
+
+        #progress-bar {
+            width: 100%;
+            height: 20px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .dark #progress-bar {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .light #progress-bar {
+            background: rgba(0,0,0,0.1);
+        }
+
+        #progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        #progress-time {
+            display: flex;
+            justify-content: space-between;
+            font-size: 2rem;
+            opacity: 0.7;
+        }
+
+        /* Volume */
+        #volume-section {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 2.5rem;
+        }
+
+        #volume-bar {
+            flex: 1;
+            height: 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .dark #volume-bar {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .light #volume-bar {
+            background: rgba(0,0,0,0.1);
+        }
+
+        #volume-fill {
+            height: 100%;
+            background: #4CAF50;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        /* Track List (CUE) */
+        #track-list {
+            margin-top: 30px;
+        }
+
+        #track-list h2 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            opacity: 0.8;
+        }
+
+        #track-list-items {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .track-item {
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-size: 1.8rem;
+            display: flex;
+            justify-content: space-between;
+            transition: all 0.3s ease;
+        }
+
+        .dark .track-item {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .light .track-item {
+            background: rgba(0,0,0,0.05);
+        }
+
+        .track-item.current {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff;
+            font-weight: bold;
+            transform: scale(1.02);
+        }
+
+        .track-item .track-number {
+            opacity: 0.6;
+            margin-right: 15px;
+        }
+
+        .track-item .track-name {
+            flex: 1;
+        }
+
+        .track-item .track-duration {
+            opacity: 0.6;
+        }
+
+        /* Split mode adjustments (smaller fonts) */
+        .mode-split #track-info h1 { font-size: 2.5rem; }
+        .mode-split #track-info .artist { font-size: 2rem; }
+        .mode-split #track-info .album { font-size: 1.8rem; }
+        .mode-split #technical-info { font-size: 1.3rem; }
+        .mode-split #progress-time { font-size: 1.5rem; }
+        .mode-split #volume-section { font-size: 1.8rem; }
+        .mode-split #track-list h2 { font-size: 1.8rem; }
+        .mode-split .track-item { font-size: 1.3rem; }
+    </style>
+</head>
+<body class="dark">
+    <div id="monitor-container" class="mode-split">
+        <!-- Info Panel -->
+        <div id="info-panel">
+            <!-- Album Cover (только в Info mode) -->
+            <div id="album-cover-section" style="display:none;">
+                <img id="album-cover-large" src="" alt="Album Cover">
+            </div>
+
+            <!-- Track Info -->
+            <div id="track-info">
+                <h1 id="track-title">Aether Player</h1>
+                <div class="artist" id="track-artist">Ready to play</div>
+                <div class="album" id="track-album"></div>
+            </div>
+
+            <!-- Technical Details -->
+            <div id="technical-info">
+                <div><strong>Формат:</strong> <span id="tech-format">-</span></div>
+                <div><strong>Битрейт:</strong> <span id="tech-bitrate">-</span></div>
+                <div><strong>Sample Rate:</strong> <span id="tech-samplerate">-</span></div>
+                <div><strong>Каналы:</strong> <span id="tech-channels">-</span></div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div id="progress-section">
+                <div id="progress-bar">
+                    <div id="progress-fill"></div>
+                </div>
+                <div id="progress-time">
+                    <span id="current-time">0:00</span>
+                    <span id="total-time">0:00</span>
+                </div>
+            </div>
+
+            <!-- Volume -->
+            <div id="volume-section">
+                <span>🔊 Громкость:</span>
+                <div id="volume-bar">
+                    <div id="volume-fill"></div>
+                </div>
+                <span id="volume-percent">0%</span>
+            </div>
+
+            <!-- Track List (CUE) -->
+            <div id="track-list" style="display:none;">
+                <h2>Треки альбома</h2>
+                <div id="track-list-items"></div>
+            </div>
+        </div>
+
+        <!-- Image Panel -->
+        <div id="image-panel">
+            <img id="current-image" src="/static/logo.png" alt="Album Art" onerror="this.style.display='none'">
+        </div>
+    </div>
+
+    <script>
+        // State
+        let currentState = {
+            monitor: { display_mode: 'split', theme: 'dark', current_image_index: 0, image_gallery: [] },
+            player: { status: 'stopped', track: '', position: 0, duration: 0, volume: 50 }
+        };
+
+        // Update UI
+        function updateUI(state) {
+            currentState = state;
+
+            // Apply theme
+            document.body.className = state.monitor.theme;
+
+            // Apply display mode
+            const container = document.getElementById('monitor-container');
+            container.className = `mode-${state.monitor.display_mode}`;
+
+            // Show/hide album cover in info mode
+            const coverSection = document.getElementById('album-cover-section');
+            if (state.monitor.display_mode === 'info') {
+                coverSection.style.display = 'block';
+                updateAlbumCover(state);
+            } else {
+                coverSection.style.display = 'none';
+            }
+
+            // Update image
+            updateImage(state);
+
+            // Update player info
+            updatePlayerInfo(state.player);
+
+            // Update progress
+            updateProgress(state.player.position, state.player.duration);
+
+            // Update volume
+            updateVolume(state.player.volume);
+
+            // Update track list (if CUE)
+            updateTrackList(state.player);
+        }
+
+        function updateImage(state) {
+            const gallery = state.monitor.image_gallery;
+            const index = state.monitor.current_image_index;
+
+            if (gallery && gallery.length > 0 && gallery[index]) {
+                const imagePath = gallery[index].replace(/^\/mnt\/hdd/, '/media');
+                document.getElementById('current-image').src = imagePath;
+                document.getElementById('current-image').style.display = 'block';
+            } else {
+                document.getElementById('current-image').style.display = 'none';
+            }
+        }
+
+        function updateAlbumCover(state) {
+            const gallery = state.monitor.image_gallery;
+            const index = state.monitor.current_image_index;
+
+            if (gallery && gallery.length > 0 && gallery[index]) {
+                const imagePath = gallery[index].replace(/^\/mnt\/hdd/, '/media');
+                document.getElementById('album-cover-large').src = imagePath;
+            }
+        }
+
+        function updatePlayerInfo(player) {
+            if (!player.track) {
+                document.getElementById('track-title').textContent = 'Aether Player';
+                document.getElementById('track-artist').textContent = 'Ready to play';
+                document.getElementById('track-album').textContent = '';
+                return;
+            }
+
+            // Parse track info from filename
+            const track = player.track.split('/').pop();
+            const parts = track.split(' - ');
+
+            if (player.current_cue_track) {
+                document.getElementById('track-title').textContent = player.current_cue_track.title || track;
+                document.getElementById('track-artist').textContent = player.current_cue_track.performer || '';
+            } else {
+                document.getElementById('track-title').textContent = parts[parts.length - 1]?.replace(/\.(flac|mp3|wav|ape|wv|dsf|dff|m4a|aac|ogg)$/i, '') || track;
+                document.getElementById('track-artist').textContent = parts.length > 1 ? parts.slice(0, -1).join(' - ') : '';
+            }
+
+            // Album name from directory
+            const albumDir = player.track.split('/').slice(-2, -1)[0];
+            document.getElementById('track-album').textContent = albumDir || '';
+
+            // Technical info (placeholder - need to add metadata endpoint)
+            const ext = track.match(/\.(flac|mp3|wav|ape|wv|dsf|dff|m4a|aac|ogg)$/i);
+            document.getElementById('tech-format').textContent = ext ? ext[1].toUpperCase() : '-';
+        }
+
+        function updateProgress(position, duration) {
+            const percent = duration > 0 ? (position / duration) * 100 : 0;
+            document.getElementById('progress-fill').style.width = percent + '%';
+
+            document.getElementById('current-time').textContent = formatTime(position);
+            document.getElementById('total-time').textContent = formatTime(duration);
+        }
+
+        function updateVolume(volume) {
+            document.getElementById('volume-fill').style.width = volume + '%';
+            document.getElementById('volume-percent').textContent = Math.round(volume) + '%';
+        }
+
+        function updateTrackList(player) {
+            const trackListDiv = document.getElementById('track-list');
+            const itemsDiv = document.getElementById('track-list-items');
+
+            if (player.cue_tracks && player.cue_tracks.length > 0) {
+                trackListDiv.style.display = 'block';
+                itemsDiv.innerHTML = '';
+
+                player.cue_tracks.forEach((track, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'track-item';
+
+                    const isCurrent = player.current_cue_track && track.number === player.current_cue_track.number;
+                    if (isCurrent) div.classList.add('current');
+
+                    div.innerHTML = `
+                        <span class="track-number">${track.number}.</span>
+                        <span class="track-name">${track.title}</span>
+                        <span class="track-duration">${formatTime(track.duration_seconds || 0)}</span>
+                    `;
+
+                    itemsDiv.appendChild(div);
+                });
+            } else {
+                trackListDiv.style.display = 'none';
+            }
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Fetch state from API
+        function fetchState() {
+            fetch('/api/monitor/state')
+                .then(r => r.json())
+                .then(updateUI)
+                .catch(console.error);
+        }
+
+        // Auto-refresh
+        setInterval(fetchState, 500);
+        fetchState();
+    </script>
+</body>
+</html>
