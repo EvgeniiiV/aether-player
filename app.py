@@ -393,7 +393,6 @@ def load_audio_enhancement_setting():
 
 # Глобальные переменные
 player_process = None
-image_viewer_process = None  # Процесс для отображения изображений через MPV на HDMI
 last_position_update = time.time()
 
 # Инициализация модуля аудио-улучшений
@@ -1106,7 +1105,7 @@ def get_status():
 @app.route("/play", methods=['POST'])
 def play():
     """Начать воспроизведение файла"""
-    global player_state, monitor_state, image_viewer_process
+    global player_state, monitor_state
 
     file_subpath = request.form.get('filepath')
     start_time = request.form.get('start_time')  # Время начала в секундах для CUE-треков
@@ -1117,42 +1116,11 @@ def play():
     full_path = os.path.join(MEDIA_ROOT, file_subpath)
     file_type = get_file_type(full_path)
 
-    # Для изображений используем MPV с DRM (работает лучше чем fbi на современных RPi)
+    # Для изображений обновляем состояние для отображения на HDMI через Chromium
     if file_type == 'image':
         logger.info(f"Отображение изображения: {file_subpath}")
 
-        # Останавливаем предыдущий просмотр изображений
-        if image_viewer_process:
-            try:
-                image_viewer_process.terminate()
-                image_viewer_process.wait(timeout=2)
-            except:
-                try:
-                    image_viewer_process.kill()
-                except:
-                    pass
-            image_viewer_process = None
-
-        # Также убиваем старые процессы fbi (для обратной совместимости)
-        isolated_run(["sudo", "killall", "fbi"], check=False)
-
-        # Используем MPV для отображения изображений с DRM на HDMI
-        from subprocess import DEVNULL, Popen
-        command = [
-            "mpv",
-            "--vo=gpu",
-            "--gpu-context=drm",
-            "--image-display-duration=inf",  # Показывать бесконечно
-            "--fullscreen",
-            "--no-audio",
-            "--quiet",
-            full_path
-        ]
-
-        image_viewer_process = Popen(command, stdout=DEVNULL, stderr=DEVNULL)
-        logger.info(f"✓ Изображение отображено через MPV на HDMI (PID: {image_viewer_process.pid})")
-
-        # Также обновляем состояние для будущего HDMI display
+        # Обновляем состояние для HDMI display
         image_dir = os.path.dirname(full_path)
         image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')
         monitor_state['image_gallery'] = [
@@ -1163,6 +1131,8 @@ def play():
             monitor_state['current_image_index'] = monitor_state['image_gallery'].index(full_path)
         except ValueError:
             monitor_state['current_image_index'] = 0
+
+        logger.info(f"🖼️ Изображение отображено на HDMI через браузер: {os.path.basename(full_path)} ({monitor_state['current_image_index'] + 1}/{len(monitor_state['image_gallery'])})")
 
         return jsonify({'status': 'ok', 'message': 'Изображение отображено'})
     
@@ -1481,46 +1451,14 @@ def set_volume():
 
 @app.route("/view_image", methods=['POST'])
 def view_image():
-    """Просмотр изображения через MPV на HDMI"""
-    global image_viewer_process, monitor_state
+    """Просмотр изображения на HDMI через Chromium browser"""
+    global monitor_state
     file_subpath = request.form.get('filepath')
     logger.info(f"Просмотр изображения: {file_subpath}")
 
     full_path = os.path.join(MEDIA_ROOT, file_subpath)
     if os.path.isfile(full_path):
-        # Останавливаем предыдущий просмотр
-        if image_viewer_process:
-            try:
-                image_viewer_process.terminate()
-                image_viewer_process.wait(timeout=2)
-            except:
-                try:
-                    image_viewer_process.kill()
-                except:
-                    pass
-            image_viewer_process = None
-
-        # Убиваем старые fbi процессы
-        isolated_run(["sudo", "killall", "fbi"], check=False)
-
-        # Запускаем MPV для отображения изображения с DRM на HDMI
-        from subprocess import DEVNULL, Popen
-        command = [
-            "mpv",
-            "--vo=gpu",
-            "--gpu-context=drm",
-            "--loop-file=inf",  # Зацикливаем файл, чтобы не закрывался
-            "--image-display-duration=inf",
-            "--fullscreen",
-            "--no-audio",
-            "--quiet",
-            full_path
-        ]
-
-        image_viewer_process = Popen(command, stdout=DEVNULL, stderr=DEVNULL)
-        logger.info(f"✓ Изображение отображено через MPV на HDMI: {os.path.basename(full_path)} (PID: {image_viewer_process.pid})")
-
-        # Также обновляем состояние для будущего HDMI display (опционально)
+        # Обновляем состояние для HDMI display
         image_dir = os.path.dirname(full_path)
         image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')
         monitor_state['image_gallery'] = [
@@ -1531,6 +1469,8 @@ def view_image():
             monitor_state['current_image_index'] = monitor_state['image_gallery'].index(full_path)
         except ValueError:
             monitor_state['current_image_index'] = 0
+
+        logger.info(f"🖼️ Изображение отображено на HDMI: {os.path.basename(full_path)} ({monitor_state['current_image_index'] + 1}/{len(monitor_state['image_gallery'])})")
 
     return jsonify({'status': 'ok'})
 
