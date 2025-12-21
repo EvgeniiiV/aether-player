@@ -420,6 +420,9 @@ monitor_state = {
     'image_gallery': [],  # Список изображений текущего альбома
 }
 
+# Процесс fbi для отображения изображений
+fbi_process = None
+
 def get_current_cue_track():
     """Определяет текущий трек CUE по позиции воспроизведения"""
     if not player_state.get('cue_tracks'):
@@ -427,22 +430,84 @@ def get_current_cue_track():
 
     current_position = player_state['position']
     tracks = player_state['cue_tracks']
+    current_file = os.path.basename(player_state.get('track', ''))
+
+    # Для multi-file CUE нужно учитывать только треки из текущего файла
+    current_file_tracks = [t for t in tracks if t.get('file') == current_file]
+
+    if not current_file_tracks:
+        # Если нет треков для текущего файла, возвращаем None
+        return None
 
     # Находим трек, в диапазон которого попадает текущая позиция
-    for i, track in enumerate(tracks):
+    for i, track in enumerate(current_file_tracks):
         track_start = track.get('relative_time_seconds', 0)
 
         # Определяем конец трека
-        if i < len(tracks) - 1:
-            track_end = tracks[i + 1].get('relative_time_seconds', 0)
+        if i < len(current_file_tracks) - 1:
+            track_end = current_file_tracks[i + 1].get('relative_time_seconds', 0)
         else:
-            # Последний трек - до конца файла
+            # Последний трек этого файла - до конца файла
             track_end = player_state['duration']
 
         if track_start <= current_position < track_end:
             return track
 
     return None
+
+def show_image_with_fbi(image_path):
+    """Отображает изображение через fbi (framebuffer image viewer)"""
+    global fbi_process
+
+    try:
+        # Останавливаем предыдущий процесс fbi если он есть
+        stop_fbi()
+
+        # Запускаем fbi для отображения изображения
+        # -a: автомасштабирование
+        # -noverbose: без вывода информации
+        # -T 1: использовать первый терминал (tty1)
+        # --nocomments: не показывать комментарии
+        command = ["sudo", "fbi", "-a", "-noverbose", "-T", "1", "--nocomments", image_path]
+
+        logger.info(f"🖼️ Запуск fbi для изображения: {image_path}")
+        fbi_process = subprocess.Popen(
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        logger.info(f"✅ FBI процесс запущен (PID: {fbi_process.pid})")
+        return True
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка запуска fbi: {e}")
+        return False
+
+def stop_fbi():
+    """Останавливает процесс fbi"""
+    global fbi_process
+
+    try:
+        # Останавливаем наш процесс
+        if fbi_process and fbi_process.poll() is None:
+            fbi_process.terminate()
+            fbi_process.wait(timeout=2)
+            logger.info("🛑 FBI процесс остановлен")
+
+        # Дополнительно убиваем все процессы fbi через killall
+        subprocess.run(["sudo", "killall", "fbi"],
+                      stdout=subprocess.DEVNULL,
+                      stderr=subprocess.DEVNULL,
+                      timeout=2)
+
+        fbi_process = None
+
+    except subprocess.TimeoutExpired:
+        if fbi_process:
+            fbi_process.kill()
+            fbi_process = None
+    except Exception as e:
+        logger.error(f"Ошибка остановки fbi: {e}")
 
 def update_position_if_playing():
     """Обновляет позицию если трек играет"""
@@ -589,15 +654,14 @@ def ensure_mpv_is_running():
             pass
 
         # Выбираем видео драйвер
-        # ВАЖНО: Используем null для headless, чтобы освободить DRM для отображения изображений
-        # DRM будет использоваться только при воспроизведении видео файлов
+        # Для Raspberry Pi используем DRM для вывода видео через HDMI
         if display_available:
             if os.environ.get('DISPLAY'):
-                vo_driver = "gpu"
+                vo_driver = "gpu"  # X11 с GPU ускорением
             else:
-                vo_driver = "null"  # null вместо drm, чтобы освободить DRM для изображений
+                vo_driver = "drm"  # DRM для прямого вывода на HDMI без X11
         else:
-            vo_driver = "null"
+            vo_driver = "null"  # Headless режим без дисплея
         
         # ВАЖНО: НЕ КОММЕНТИРОВАТЬ --audio-device! 
         # Эта строка обеспечивает направление звука на правильное устройство.
@@ -1116,11 +1180,11 @@ def play():
     full_path = os.path.join(MEDIA_ROOT, file_subpath)
     file_type = get_file_type(full_path)
 
-    # Для изображений обновляем состояние для отображения на HDMI через Chromium
+    # Для изображений отображаем через fbi (framebuffer image viewer)
     if file_type == 'image':
         logger.info(f"Отображение изображения: {file_subpath}")
 
-        # Обновляем состояние для HDMI display
+        # Обновляем состояние для галереи изображений
         image_dir = os.path.dirname(full_path)
         image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')
         monitor_state['image_gallery'] = [
@@ -1132,9 +1196,13 @@ def play():
         except ValueError:
             monitor_state['current_image_index'] = 0
 
-        logger.info(f"🖼️ Изображение отображено на HDMI через браузер: {os.path.basename(full_path)} ({monitor_state['current_image_index'] + 1}/{len(monitor_state['image_gallery'])})")
-
-        return jsonify({'status': 'ok', 'message': 'Изображение отображено'})
+        # Отображаем изображение через fbi
+        if show_image_with_fbi(full_path):
+            logger.info(f"🖼️ Изображение отображено на HDMI через fbi: {os.path.basename(full_path)} ({monitor_state['current_image_index'] + 1}/{len(monitor_state['image_gallery'])})")
+            return jsonify({'status': 'ok', 'message': 'Изображение отображено'})
+        else:
+            logger.error(f"❌ Не удалось отобразить изображение через fbi")
+            return jsonify({'status': 'error', 'message': 'Ошибка отображения изображения'})
     
     # Для аудио и видео используем MPV
     if file_type not in ['audio', 'video']:
@@ -1171,16 +1239,59 @@ def play():
     
     # Переключаем video output в зависимости от типа файла
     if file_type == 'video':
-        # Для видео включаем DRM output
-        logger.info("🎬 Видео файл - включаем DRM output")
-        mpv_command({"command": ["set_property", "vo", "gpu"]})
-        mpv_command({"command": ["set_property", "gpu-context", "drm"]})
+        # Для видео включаем DRM output для прямого вывода на HDMI
+        logger.info("🎬 Видео файл - включаем DRM output для HDMI")
+        # Останавливаем fbi чтобы освободить framebuffer для видео
+        stop_fbi()
+        mpv_command({"command": ["set_property", "vo", "drm"]})
     else:
         # Для аудио отключаем video output, чтобы не блокировать DRM для изображений
         logger.info("🎵 Аудио файл - отключаем video output (vo=null)")
         mpv_command({"command": ["set_property", "vo", "null"]})
 
-    # Загружаем файл в MPV
+    # Проверяем, нужно ли загружать новый файл или просто перейти к другому треку в том же файле
+    current_playing_track = player_state.get('track', '')
+    same_file = (file_subpath == current_playing_track and player_state.get('status') in ['playing', 'paused'])
+
+    # Для CUE файлов с несколькими физическими файлами (A.dsf, B.dsf) нужно проверить,
+    # что CUE трек принадлежит текущему физическому файлу
+    if same_file and start_time and player_state.get('cue_tracks'):
+        try:
+            start_seconds = float(start_time)
+            # Ищем CUE трек по времени начала
+            target_cue_track = None
+            for cue_track in player_state['cue_tracks']:
+                if abs(cue_track.get('start_time_seconds', 0) - start_seconds) < 1:
+                    target_cue_track = cue_track
+                    break
+
+            # Если нашли CUE трек, проверяем его физический файл
+            if target_cue_track:
+                cue_file = target_cue_track.get('file', '')
+                current_file = os.path.basename(full_path)
+                if cue_file and cue_file != current_file:
+                    same_file = False  # Трек из другого файла - нужен loadfile
+                    logger.info(f"🔄 CUE трек из другого физического файла: {cue_file} != {current_file}")
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Ошибка проверки CUE трека: {e}")
+
+    if same_file and start_time:
+        # Тот же файл, но другой CUE трек - используем seek
+        logger.info(f"🔄 Переключение на другой CUE трек в том же файле: {start_time}s")
+        try:
+            start_seconds = float(start_time)
+            mpv_command({"command": ["seek", start_seconds, "absolute"]})
+            # Обновляем позицию сразу
+            player_state['position'] = start_seconds
+            player_state['start_time'] = start_seconds
+            # current_cue_track обновится автоматически в update_position_if_playing
+            emit_status_update()
+            return jsonify({'status': 'ok', 'message': 'CUE трек переключён'})
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Некорректное время начала для seek: {start_time}, ошибка: {e}")
+            return jsonify({'status': 'error', 'message': 'Некорректное время начала'})
+
+    # Новый файл - загружаем через loadfile
     mpv_result = mpv_command({"command": ["loadfile", full_path, "replace"]})
     if mpv_result.get("status") == "error":
         logger.error(f"Ошибка загрузки файла: {mpv_result}")
@@ -1205,11 +1316,22 @@ def play():
             try:
                 parser = CueParser(cue_path)
                 info = parser.get_info()
-                # Проверяем, что этот CUE файл относится к нашему аудио файлу
-                if info['file'] == audio_filename:
-                    cue_tracks_info = info['tracks']
-                    logger.info(f"📀 Загружен CUE файл: {cue_file}, треков: {len(cue_tracks_info)}")
+                tracks = info.get('tracks', [])
+
+                # Для multi-file CUE проверяем, есть ли хотя бы один трек для текущего файла
+                has_tracks_for_this_file = any(
+                    track.get('file') == audio_filename for track in tracks
+                )
+
+                logger.debug(f"[CUE] Проверка CUE файла {cue_file}: треков={len(tracks)}, для файла {audio_filename}={has_tracks_for_this_file}")
+
+                if has_tracks_for_this_file:
+                    # Загружаем ВСЕ треки из CUE (для multi-file CUE это нужно)
+                    cue_tracks_info = tracks
+                    logger.info(f"📀 Загружен CUE файл: {cue_file}, всего треков: {len(cue_tracks_info)}")
                     break
+                else:
+                    logger.debug(f"[CUE] CUE файл {cue_file} не содержит треков для файла {audio_filename}")
             except Exception as e:
                 logger.warning(f"Ошибка загрузки CUE файла {cue_file}: {e}")
 
@@ -1451,14 +1573,14 @@ def set_volume():
 
 @app.route("/view_image", methods=['POST'])
 def view_image():
-    """Просмотр изображения на HDMI через Chromium browser"""
+    """Просмотр изображения на HDMI через fbi (framebuffer image viewer)"""
     global monitor_state
     file_subpath = request.form.get('filepath')
     logger.info(f"Просмотр изображения: {file_subpath}")
 
     full_path = os.path.join(MEDIA_ROOT, file_subpath)
     if os.path.isfile(full_path):
-        # Обновляем состояние для HDMI display
+        # Обновляем состояние для галереи изображений
         image_dir = os.path.dirname(full_path)
         image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')
         monitor_state['image_gallery'] = [
@@ -1470,9 +1592,15 @@ def view_image():
         except ValueError:
             monitor_state['current_image_index'] = 0
 
-        logger.info(f"🖼️ Изображение отображено на HDMI: {os.path.basename(full_path)} ({monitor_state['current_image_index'] + 1}/{len(monitor_state['image_gallery'])})")
+        # Отображаем изображение через fbi
+        if show_image_with_fbi(full_path):
+            logger.info(f"🖼️ Изображение отображено на HDMI через fbi: {os.path.basename(full_path)} ({monitor_state['current_image_index'] + 1}/{len(monitor_state['image_gallery'])})")
+            return jsonify({'status': 'ok'})
+        else:
+            logger.error(f"❌ Не удалось отобразить изображение через fbi")
+            return jsonify({'status': 'error', 'message': 'Ошибка отображения изображения'}), 500
 
-    return jsonify({'status': 'ok'})
+    return jsonify({'status': 'error', 'message': 'Файл не найден'}), 404
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -1899,9 +2027,9 @@ def system_shutdown():
         isolated_run(['sync'], check=False)
         # Размонтируем внешний диск
         isolated_run(['sudo', 'umount', '/mnt/hdd'], check=False)
-        # Запускаем отключение через 1 минуту
-        isolated_run(['sudo', 'shutdown', '-h', '+1'], check=False)
-        return jsonify({'status': 'ok', 'message': 'Система будет отключена через 1 минуту'})
+        # Запускаем немедленное отключение
+        isolated_run(['sudo', 'shutdown', '-h', 'now'], check=False)
+        return jsonify({'status': 'ok', 'message': 'Система отключается'})
     
     elif action == 'reboot':
         logger.info("Запрос перезагрузки системы")
@@ -1909,9 +2037,9 @@ def system_shutdown():
         stop_mpv_internal()
         # Синхронизируем файловую систему
         isolated_run(['sync'], check=False)
-        # Запускаем перезагрузку через 30 секунд
-        isolated_run(['sudo', 'shutdown', '-r', '+1'], check=False)
-        return jsonify({'status': 'ok', 'message': 'Система будет перезагружена через 1 минуту'})
+        # Запускаем немедленную перезагрузку
+        isolated_run(['sudo', 'shutdown', '-r', 'now'], check=False)
+        return jsonify({'status': 'ok', 'message': 'Система перезагружается'})
     
     elif action == 'umount_hdd':
         logger.info("Размонтирование внешнего диска")
@@ -2049,6 +2177,11 @@ def get_hdmi_display_state():
             metadata = get_audio_metadata(track_path)
 
     # Собираем полную информацию
+    cue_tracks = player_state.get('cue_tracks')
+    current_cue_track = player_state.get('current_cue_track')
+
+    logger.debug(f"[HDMI_DISPLAY_STATE] cue_tracks={cue_tracks is not None}, current_cue={current_cue_track is not None}")
+
     response = {
         'monitor': monitor_state,
         'player': {
@@ -2059,8 +2192,8 @@ def get_hdmi_display_state():
             'volume': player_state['volume'],
             'playlist': player_state['playlist'],
             'playlist_index': player_state['playlist_index'],
-            'cue_tracks': player_state.get('cue_tracks'),
-            'current_cue_track': player_state.get('current_cue_track'),
+            'cue_tracks': cue_tracks,
+            'current_cue_track': current_cue_track,
             'metadata': metadata
         }
     }
@@ -2118,12 +2251,16 @@ def navigate_hdmi_display_image():
     new_image = gallery[monitor_state['current_image_index']]
     logger.info(f"🖼️ Переключение изображения: {direction} -> {new_image}")
 
-    return jsonify({
-        'status': 'ok',
-        'index': monitor_state['current_image_index'],
-        'image': new_image,
-        'total': len(gallery)
-    })
+    # Отображаем новое изображение через fbi
+    if show_image_with_fbi(new_image):
+        return jsonify({
+            'status': 'ok',
+            'index': monitor_state['current_image_index'],
+            'image': new_image,
+            'total': len(gallery)
+        })
+    else:
+        return jsonify({'status': 'error', 'message': 'Failed to display image'}), 500
 
 # Запуск сервера
 if __name__ == "__main__":

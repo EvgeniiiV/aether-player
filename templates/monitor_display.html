@@ -570,6 +570,35 @@
         document.body.style.width = '100%';
         document.body.style.height = '100%';
 
+        // Remove Google Translate and other overlays
+        function removeTranslateElements() {
+            // Удаляем все элементы переводчика
+            const selectors = [
+                'iframe[id*="translate"]',
+                'iframe[class*="translate"]',
+                'div[id*="translate"]',
+                'div[class*="translate"]',
+                'div[id*="google"]',
+                'div[class*="google"]',
+                '.skiptranslate',
+                '#google_translate_element',
+                'body > iframe',
+                'body > div[style*="position"][style*="top"]'
+            ];
+
+            selectors.forEach(selector => {
+                document.querySelectorAll(selector).forEach(el => {
+                    if (el && el.parentNode) {
+                        el.parentNode.removeChild(el);
+                    }
+                });
+            });
+        }
+
+        // Запускаем удаление периодически
+        setInterval(removeTranslateElements, 1000);
+        removeTranslateElements();
+
         // Auto-refresh
         setInterval(fetchState, 500);
         fetchState();
