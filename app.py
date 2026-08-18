@@ -214,62 +214,30 @@ def get_cue_info_for_folder(folder_path):
     return cue_albums
 
 def get_best_audio_device():
-    """Автоматически определяет лучшее доступное аудио устройство"""
+    """Автоматически определяет лучшее доступное аудио устройство
+
+    ВАЖНО: Используем alsa/default для интеграции с CamillaDSP!
+    CamillaDSP настроен через ~/.asoundrc как default device.
+    Звуковая цепочка: MPV -> ALSA default -> Loopback -> CamillaDSP -> Scarlett 4i4
+    """
     try:
-        # Проверяем доступные аудио карты
+        # Проверяем доступные аудио карты для логирования
         with open('/proc/asound/cards', 'r') as f:
             cards_content = f.read()
-        
+
         logger.debug(f"Доступные ALSA карты:\n{cards_content}")
-        
-        # Парсим карты для динамического определения номеров
-        import re
-        card_lines = cards_content.strip().split('\n')
-        detected_cards = {}
-        
-        for line in card_lines:
-            # Формат: " 0 [Headphones     ]: bcm2835_headpho - bcm2835 Headphones"
-            match = re.match(r'\s*(\d+)\s+\[([^\]]+)\]\s*:\s*(.+)', line)
-            if match:
-                card_num = int(match.group(1))
-                card_name = match.group(2).strip()
-                card_desc = match.group(3).strip()
-                detected_cards[card_num] = {'name': card_name, 'desc': card_desc}
-        
-        logger.debug(f"Обнаружены карты: {detected_cards}")
-        
-        # Приоритет устройств (от лучшего к худшему) - теперь ищем динамически
-        audio_priorities = [
-            ('Scarlett', 'Focusrite'),     # Focusrite Scarlett (любой номер)
-            ('USB', 'USB'),                # Любое USB аудио
-            ('vc4hdmi0', 'vc4-hdmi'),      # HDMI выход 1
-            ('Headphones', 'Headphones')   # Встроенный 3.5mm
-        ]
-        
-        # Ищем устройства по приоритету
-        for priority_name, search_pattern in audio_priorities:
-            for card_num, card_info in detected_cards.items():
-                card_name = card_info['name']
-                card_desc = card_info['desc']
-                
-                # Проверяем вхождение паттерна в имя или описание карты
-                if (search_pattern.lower() in card_name.lower() or 
-                    search_pattern.lower() in card_desc.lower()):
-                    
-                    alsa_device = f"alsa/hw:{card_num},0"
-                    logger.info(f"✅ Выбрано аудио устройство: {priority_name} -> {card_name} ({alsa_device})")
-                    logger.info(f"📋 Описание карты: {card_desc}")
-                    return alsa_device
-        
-        # Если ничего не найдено, используем по умолчанию
-        logger.warning("⚠️ НЕ УДАЛОСЬ определить специфическое аудио устройство!")
-        logger.warning(f"📊 Доступные карты: {list(detected_cards.keys())}")
-        logger.warning("🔄 Используем 'auto' - MPV выберет устройство сам")
-        logger.warning("💡 Если звука нет, проверьте подключение Scarlett 2i2")
-        return "auto"
-        
+
+        # Используем ALSA default для интеграции с CamillaDSP
+        alsa_device = "alsa/default"
+        logger.info(f"✅ Используем аудио устройство: {alsa_device}")
+        logger.info(f"🎛️  Звук проходит через CamillaDSP (ALSA default -> Loopback -> CamillaDSP -> Scarlett)")
+        logger.info(f"📊 Текущая конфигурация CamillaDSP: см. /etc/camilladsp/active-config.yml")
+
+        return alsa_device
+
     except Exception as e:
         logger.error(f"Ошибка определения аудио устройства: {e}")
+        logger.warning("⚠️ Используем 'auto' как fallback")
         return "auto"
 
 def get_file_duration_ffprobe(filepath):
