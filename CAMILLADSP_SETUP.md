@@ -64,12 +64,15 @@ camilladsp-switch
 - **Full-Range**: `/etc/camilladsp/configs/fullrange-stereo.yml`
 - **Bi-Amping**: `/etc/camilladsp/configs/altec601b-biamp-3000hz.yml`
 - **Активная** (симлинк): `/etc/camilladsp/active-config.yml`
+- **State file**: `/var/lib/camilladsp/statefile.yml` (сохраняет текущее состояние)
 
 ### Системные файлы
 - **Бинарник**: `/usr/local/bin/camilladsp`
 - **Скрипт переключения**: `/usr/local/bin/camilladsp-switch`
 - **Systemd сервис**: `/etc/systemd/system/camilladsp.service`
 - **ALSA конфиг**: `~/.asoundrc`
+- **CamillaDSP GUI**: `/opt/camillagui-server/`
+- **GUI конфигурация**: `/opt/camillagui-server/config/camillagui.yml`
 
 ## 🎵 Цепочка обработки звука
 
