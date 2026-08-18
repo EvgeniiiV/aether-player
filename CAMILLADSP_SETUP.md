@@ -10,7 +10,8 @@ CamillaDSP установлен и настроен для работы с Focus
 
 ## 🌐 Веб-интерфейс CamillaDSP GUI
 
-**URL:** `http://192.168.12.148:5050/gui`
+**URL:** `http://aether-player.local:5050/gui/index.html`  
+или просто: `http://aether-player.local:5050/`
 
 CamillaDSP GUI предоставляет графический интерфейс для:
 - Редактирования конфигураций в реальном времени
