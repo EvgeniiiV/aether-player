@@ -1618,6 +1618,74 @@ def create_folder():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+def get_audio_status():
+    """Диагностика аудиотракта: CamillaDSP, Scarlett, loopback, дубли автозапуска"""
+    status = {
+        'camilladsp_active': False,
+        'camilladsp_config': 'неизвестно',
+        'scarlett_present': False,
+        'aloop_loaded': False,
+        'signal_active': None,
+        'extra_player_processes': 0,
+        'duplicate_autostart': False,
+    }
+    try:
+        r = subprocess.run(['systemctl', 'is-active', 'camilladsp.service'],
+                            capture_output=True, text=True)
+        status['camilladsp_active'] = (r.stdout.strip() == 'active')
+    except Exception as e:
+        logger.error(f"Ошибка проверки camilladsp: {e}")
+
+    try:
+        cfg = os.path.realpath('/etc/camilladsp/active-config.yml')
+        status['camilladsp_config'] = os.path.basename(cfg)
+    except Exception:
+        pass
+
+    try:
+        r = subprocess.run(['aplay', '-l'], capture_output=True, text=True)
+        status['scarlett_present'] = 'Scarlett' in r.stdout
+    except Exception as e:
+        logger.error(f"Ошибка проверки Scarlett: {e}")
+
+    try:
+        r = subprocess.run(['lsmod'], capture_output=True, text=True)
+        status['aloop_loaded'] = 'snd_aloop' in r.stdout
+    except Exception as e:
+        logger.error(f"Ошибка проверки snd_aloop: {e}")
+
+    if status['camilladsp_active']:
+        try:
+            r = subprocess.run(
+                ['journalctl', '-u', 'camilladsp', '--no-pager', '-n', '400'],
+                capture_output=True, text=True)
+            rms_lines = [l for l in r.stdout.split('\n') if 'signal rms' in l]
+            if rms_lines:
+                status['signal_active'] = 'values: [0.0, 0.0' not in rms_lines[-1]
+        except Exception as e:
+            logger.error(f"Ошибка проверки уровня сигнала: {e}")
+
+    # Ожидается ровно один процесс-менеджер плеера (master+worker gunicorn под systemd).
+    # Если процессов больше — значит где-то запустился ещё один экземпляр (дубль автозапуска).
+    try:
+        r = subprocess.run(['pgrep', '-c', '-f', 'gunicorn.*app:app'],
+                            capture_output=True, text=True)
+        count = int(r.stdout.strip() or 0)
+        status['extra_player_processes'] = max(0, count - 2)
+    except Exception as e:
+        logger.error(f"Ошибка подсчёта процессов плеера: {e}")
+
+    try:
+        cron_r = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
+        user_unit = os.path.expanduser('~/.config/systemd/user/aether-player.service')
+        status['duplicate_autostart'] = (
+            'autostart-aether.sh' in cron_r.stdout or os.path.exists(user_unit)
+        )
+    except Exception as e:
+        logger.error(f"Ошибка проверки дублей автозапуска: {e}")
+
+    return status
+
 def get_power_status():
     """Получает статус управления питанием периферии"""
     try:
@@ -1716,9 +1784,10 @@ def monitor_page():
         'disk_usage': disk_usage,
         'memory_usage': memory_usage,
         'service_status': service_status,
-        'reports': reports
+        'reports': reports,
+        'audio': get_audio_status()
     }
-    
+
     return render_template('monitor.html', **monitor_data)
 
 @app.route("/api/monitor")
@@ -1803,9 +1872,10 @@ def api_monitor():
         'memory_usage': memory_usage,
         'service_status': service_status,
         'power_status': power_status,
-        'reports': reports
+        'reports': reports,
+        'audio': get_audio_status()
     }
-    
+
     return jsonify(monitor_data)
 
 @app.route("/monitor/report/<filename>")

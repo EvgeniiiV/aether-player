@@ -59,6 +59,52 @@
         .stat-card.disk { border-left-color: #48bb78; }
         .stat-card.memory { border-left-color: #4299e1; }
         .stat-card.service { border-left-color: #9f7aea; }
+        .stat-card.audio { border-left-color: #38b2ac; }
+
+        .audio-section {
+            background: #fff;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        .audio-section h2 {
+            color: #4a5568;
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .audio-section h2::before {
+            content: "🔊";
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+
+        .audio-checks {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .audio-check {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 15px;
+            border-radius: 8px;
+            background: #f7fafc;
+        }
+
+        .audio-check.ok { border-left: 4px solid #48bb78; }
+        .audio-check.warn { border-left: 4px solid #ed8936; }
+        .audio-check.fail { border-left: 4px solid #f56565; }
+        .audio-check.neutral { border-left: 4px solid #a0aec0; }
+
+        .audio-check-label { color: #4a5568; font-weight: 500; }
+        .audio-check-detail { color: #718096; font-size: 0.85em; margin-left: auto; text-align: right; }
         
         .stat-header {
             display: flex;
@@ -408,8 +454,64 @@
                 </div>
                 <div class="stat-description">{{ service_status }}</div>
             </div>
+
+            <div class="stat-card audio">
+                <div class="stat-header">
+                    <div class="stat-icon">🔊</div>
+                    <div class="stat-title">Звук</div>
+                </div>
+                <div class="stat-value" style="font-size: 1.8em;">
+                    {% if audio.camilladsp_active and audio.scarlett_present and audio.aloop_loaded and audio.extra_player_processes == 0 and not audio.duplicate_autostart %}
+                        ✅ OK
+                    {% else %}
+                        ⚠️ Проблема
+                    {% endif %}
+                </div>
+                <div class="stat-description">
+                    CamillaDSP: {{ "запущен" if audio.camilladsp_active else "НЕ запущен" }}
+                    {% if audio.signal_active == true %} · сигнал идёт{% elif audio.signal_active == false %} · сигнал 0 (тишина){% endif %}
+                </div>
+            </div>
         </div>
-        
+
+        <div class="audio-section">
+            <h2>Аудиотракт</h2>
+            <div class="audio-checks">
+                <div class="audio-check {{ 'ok' if audio.camilladsp_active else 'fail' }}">
+                    <span>{{ '✅' if audio.camilladsp_active else '❌' }}</span>
+                    <span class="audio-check-label">CamillaDSP сервис</span>
+                    <span class="audio-check-detail">{{ 'активен' if audio.camilladsp_active else 'не запущен' }} ({{ audio.camilladsp_config }})</span>
+                </div>
+                <div class="audio-check {{ 'ok' if audio.scarlett_present else 'fail' }}">
+                    <span>{{ '✅' if audio.scarlett_present else '❌' }}</span>
+                    <span class="audio-check-label">Scarlett 4i4 USB</span>
+                    <span class="audio-check-detail">{{ 'видна в ALSA' if audio.scarlett_present else 'не обнаружена' }}</span>
+                </div>
+                <div class="audio-check {{ 'ok' if audio.aloop_loaded else 'fail' }}">
+                    <span>{{ '✅' if audio.aloop_loaded else '❌' }}</span>
+                    <span class="audio-check-label">ALSA Loopback (snd_aloop)</span>
+                    <span class="audio-check-detail">{{ 'загружен' if audio.aloop_loaded else 'модуль не загружен' }}</span>
+                </div>
+                <div class="audio-check {{ 'ok' if audio.signal_active else ('neutral' if audio.signal_active is none else 'warn') }}">
+                    <span>{{ '✅' if audio.signal_active else ('➖' if audio.signal_active is none else '⚠️') }}</span>
+                    <span class="audio-check-label">Уровень сигнала CamillaDSP</span>
+                    <span class="audio-check-detail">
+                        {% if audio.signal_active is none %}нет данных{% elif audio.signal_active %}звук идёт{% else %}тишина (проверьте воспроизведение){% endif %}
+                    </span>
+                </div>
+                <div class="audio-check {{ 'ok' if audio.extra_player_processes == 0 else 'warn' }}">
+                    <span>{{ '✅' if audio.extra_player_processes == 0 else '⚠️' }}</span>
+                    <span class="audio-check-label">Лишние процессы плеера</span>
+                    <span class="audio-check-detail">{{ 'нет' if audio.extra_player_processes == 0 else audio.extra_player_processes ~ ' лишних — возможен конфликт порта 8080' }}</span>
+                </div>
+                <div class="audio-check {{ 'ok' if not audio.duplicate_autostart else 'warn' }}">
+                    <span>{{ '✅' if not audio.duplicate_autostart else '⚠️' }}</span>
+                    <span class="audio-check-label">Дубли автозапуска</span>
+                    <span class="audio-check-detail">{{ 'не найдены' if not audio.duplicate_autostart else 'обнаружен старый cron/user-service — удалите вручную' }}</span>
+                </div>
+            </div>
+        </div>
+
         <div class="system-control-section">
             <h2>Управление системой</h2>
             
