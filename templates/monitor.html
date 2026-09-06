@@ -142,6 +142,206 @@
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         }
         
+        .testtone-section {
+            background: #fff;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        .testtone-section h2 {
+            color: #4a5568;
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .testtone-section h2::before {
+            content: "🎛️";
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+
+        .testtone-hint {
+            color: #718096;
+            font-size: 0.9em;
+            line-height: 1.5;
+            margin: 0 0 20px 0;
+            padding: 12px 15px;
+            background: #fffaf0;
+            border-left: 4px solid #ed8936;
+            border-radius: 6px;
+        }
+
+        .testtone-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 18px;
+        }
+
+        .testtone-group {
+            flex: 1;
+            min-width: 220px;
+        }
+
+        .testtone-group label {
+            display: block;
+            color: #4a5568;
+            font-weight: 600;
+            font-size: 0.9em;
+            margin-bottom: 8px;
+        }
+
+        .testtone-freq-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .testtone-freq-controls input[type="range"] {
+            flex: 1;
+        }
+
+        .testtone-freq-input {
+            width: 100px;
+            flex: none;
+            padding: 10px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1.1em;
+            box-sizing: border-box;
+        }
+
+        .testtone-presets {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .testtone-chip {
+            background: #edf2f7;
+            color: #4a5568;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .testtone-chip:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .testtone-channels {
+            display: flex;
+            gap: 8px;
+        }
+
+        .testtone-channel-btn {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            background: #f7fafc;
+            color: #4a5568;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s ease;
+        }
+
+        .testtone-channel-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .testtone-volume-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .testtone-volume-row input[type="range"] {
+            flex: 1;
+        }
+
+        .testtone-volume-value {
+            min-width: 48px;
+            text-align: right;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .testtone-controls {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .testtone-btn {
+            flex: 1;
+            border: none;
+            padding: 14px 20px;
+            border-radius: 8px;
+            font-size: 1.05em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .testtone-start-btn {
+            background: linear-gradient(135deg, #48bb78, #38a169);
+            color: white;
+        }
+
+        .testtone-start-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #38a169, #2f855a);
+            transform: translateY(-2px);
+        }
+
+        .testtone-stop-btn {
+            background: linear-gradient(135deg, #f56565, #e53e3e);
+            color: white;
+        }
+
+        .testtone-stop-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #e53e3e, #c53030);
+            transform: translateY(-2px);
+        }
+
+        .testtone-btn:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .testtone-status {
+            margin-top: 15px;
+            padding: 12px 15px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            display: none;
+        }
+
+        .testtone-status.playing {
+            display: block;
+            background: #f0fff4;
+            border-left: 4px solid #48bb78;
+            color: #276749;
+        }
+
+        .testtone-status.autostopped {
+            display: block;
+            background: #fffaf0;
+            border-left: 4px solid #ed8936;
+            color: #7b341e;
+        }
+
         .system-control-section {
             background: #fff;
             border-radius: 12px;
@@ -512,6 +712,66 @@
             </div>
         </div>
 
+        <div class="testtone-section">
+            <h2>Тест-тон (проверка кроссовера)</h2>
+            <p class="testtone-hint">
+                ⚠️ Перед стартом уменьшите громкость усилителей. Тон всегда запускается на минимальном
+                безопасном уровне ({{ test_tone_default_volume }}%) и автоматически останавливается через
+                {{ test_tone_autostop_seconds }}с, если про него забыть. Подавайте частоты
+                <b>ниже</b> частоты раздела кроссовера и проверяйте вольтметром/осциллографом, что на
+                ВЧ-выходе сигнала нет.
+            </p>
+
+            <div class="testtone-row">
+                <div class="testtone-group">
+                    <label for="tt-frequency">Частота, Гц (лог. шкала — тащите ползунок)</label>
+                    <div class="testtone-freq-controls">
+                        <input type="range" id="tt-freq-slider" min="0" max="1000" step="1"
+                               oninput="ttOnSliderInput(this.value)" onchange="ttOnSliderChange(this.value)">
+                        <input type="number" id="tt-frequency" class="testtone-freq-input"
+                               min="20" max="20000" step="1" value="1000"
+                               onchange="ttOnFreqInputChange(this.value)">
+                    </div>
+                    <div class="testtone-presets">
+                        <button type="button" class="testtone-chip" onclick="ttSetFreq(20)">20</button>
+                        <button type="button" class="testtone-chip" onclick="ttSetFreq(50)">50</button>
+                        <button type="button" class="testtone-chip" onclick="ttSetFreq(100)">100</button>
+                        <button type="button" class="testtone-chip" onclick="ttSetFreq(500)">500</button>
+                        <button type="button" class="testtone-chip" onclick="ttSetFreq(1000)">1к</button>
+                        <button type="button" class="testtone-chip" onclick="ttSetFreq(3000)">3к (кроссовер)</button>
+                        <button type="button" class="testtone-chip" onclick="ttSetFreq(5000)">5к</button>
+                        <button type="button" class="testtone-chip" onclick="ttSetFreq(10000)">10к</button>
+                        <button type="button" class="testtone-chip" onclick="ttSetFreq(15000)">15к</button>
+                    </div>
+                </div>
+
+                <div class="testtone-group">
+                    <label>Канал</label>
+                    <div class="testtone-channels">
+                        <button type="button" class="testtone-channel-btn active" data-channel="both" onclick="ttSetChannel('both')">Оба</button>
+                        <button type="button" class="testtone-channel-btn" data-channel="left" onclick="ttSetChannel('left')">Левый</button>
+                        <button type="button" class="testtone-channel-btn" data-channel="right" onclick="ttSetChannel('right')">Правый</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="testtone-group">
+                <label>Громкость генератора (сбрасывается на минимум при каждом старте)</label>
+                <div class="testtone-volume-row">
+                    <input type="range" id="tt-volume" min="0" max="{{ test_tone_max_volume }}" step="1"
+                           value="{{ test_tone_default_volume }}" oninput="ttOnVolumeInput(this.value)">
+                    <span class="testtone-volume-value" id="tt-volume-value">{{ test_tone_default_volume }}%</span>
+                </div>
+            </div>
+
+            <div class="testtone-controls">
+                <button type="button" class="testtone-btn testtone-start-btn" id="tt-start-btn" onclick="ttStart()">▶️ Запустить тон</button>
+                <button type="button" class="testtone-btn testtone-stop-btn" id="tt-stop-btn" onclick="ttStop()" disabled>⏹ Остановить</button>
+            </div>
+
+            <div class="testtone-status" id="tt-status"></div>
+        </div>
+
         <div class="system-control-section">
             <h2>Управление системой</h2>
             
@@ -604,16 +864,247 @@
     </div>
     
     <script>
-        // Автообновление каждые 30 секунд
+        // Автообновление каждые 30 секунд - но не когда играет тест-тон
+        // (иначе перезагрузка страницы собьёт слайдер и создаст впечатление, что тон "потерялся")
         setInterval(() => {
-            location.reload();
+            if (!ttActive) {
+                location.reload();
+            }
         }, 30000);
-        
+
         // Показываем время последнего обновления
         document.addEventListener('DOMContentLoaded', () => {
             const now = new Date().toLocaleString('ru-RU');
             document.querySelector('.header p').innerHTML += `<br><small>Обновлено: ${now}</small>`;
+            document.getElementById('tt-freq-slider').value =
+                ttSliderFromFreq(document.getElementById('tt-frequency').value);
+            ttRestoreState();  // если тон уже играет - переопределит слайдер/поля реальными значениями
         });
+
+        // ===== Генератор тестового тона =====
+        let ttActive = false;
+        let ttChannel = 'both';
+        let ttVolumeDebounce = null;
+        let ttPollTimer = null;
+        let ttCurrent = { frequency: 1000, channel: 'both', volume: {{ test_tone_default_volume }} };
+
+        // Логарифмическая шкала слайдера: позиция 0..1000 -> частота 20..20000 Гц.
+        // Линейный слайдер тут бесполезен - весь диапазон 20-500 Гц сожмётся в первые пиксели.
+        const TT_MIN_F = 20;
+        const TT_MAX_F = 20000;
+        const TT_SLIDER_MAX = 1000;
+
+        function ttFreqFromSlider(pos) {
+            return TT_MIN_F * Math.pow(TT_MAX_F / TT_MIN_F, pos / TT_SLIDER_MAX);
+        }
+
+        function ttSliderFromFreq(freq) {
+            const clamped = Math.min(TT_MAX_F, Math.max(TT_MIN_F, freq));
+            return TT_SLIDER_MAX * Math.log(clamped / TT_MIN_F) / Math.log(TT_MAX_F / TT_MIN_F);
+        }
+
+        // Пока тащишь ползунок - только визуальный отклик (без сети), это и даёт ощущение плавности
+        function ttOnSliderInput(pos) {
+            const freq = Math.round(ttFreqFromSlider(pos));
+            document.getElementById('tt-frequency').value = freq;
+        }
+
+        // Отпустили ползунок - вот теперь реально шлём новую частоту на сервер
+        function ttOnSliderChange(pos) {
+            const freq = Math.round(ttFreqFromSlider(pos));
+            document.getElementById('tt-frequency').value = freq;
+            ttApplyFrequency(freq);
+        }
+
+        function ttOnFreqInputChange(value) {
+            const freq = Math.max(TT_MIN_F, Math.min(TT_MAX_F, parseFloat(value) || TT_MIN_F));
+            document.getElementById('tt-frequency').value = Math.round(freq);
+            document.getElementById('tt-freq-slider').value = ttSliderFromFreq(freq);
+            ttApplyFrequency(freq);
+        }
+
+        function ttSetFreq(hz) {
+            document.getElementById('tt-frequency').value = hz;
+            document.getElementById('tt-freq-slider').value = ttSliderFromFreq(hz);
+            ttApplyFrequency(hz);
+        }
+
+        // Частота меняется живым запросом, который НЕ трогает громкость (в отличие от Start) -
+        // иначе слайдер постоянно сбивал бы уровень обратно на минимум
+        function ttApplyFrequency(freq) {
+            if (!ttActive) return;  // тон ещё не запущен - значение просто "запасено" на будущий Start
+            fetch('/api/test_tone/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `frequency=${encodeURIComponent(freq)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    ttCurrent.frequency = data.frequency;
+                    ttSetStatusText();
+                } else {
+                    alert('❌ Ошибка изменения частоты: ' + data.message);
+                }
+            })
+            .catch(err => console.error('Ошибка изменения частоты тест-тона:', err));
+        }
+
+        function ttSetChannel(channel) {
+            ttChannel = channel;
+            document.querySelectorAll('.testtone-channel-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.channel === channel);
+            });
+            if (!ttActive) return;  // канал ещё просто "запасён" на будущий Start
+
+            fetch('/api/test_tone/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `channel=${encodeURIComponent(channel)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    ttCurrent.channel = data.channel;
+                    ttSetStatusText();
+                } else {
+                    alert('❌ Ошибка смены канала: ' + data.message);
+                }
+            })
+            .catch(err => console.error('Ошибка смены канала тест-тона:', err));
+        }
+
+        function ttOnVolumeInput(value) {
+            document.getElementById('tt-volume-value').textContent = value + '%';
+            if (!ttActive) return;  // громкость шлём на сервер, только пока тон реально играет
+            clearTimeout(ttVolumeDebounce);
+            ttVolumeDebounce = setTimeout(() => {
+                fetch('/api/test_tone/volume', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `volume=${value}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        ttCurrent.volume = data.volume;
+                        ttSetStatusText();
+                    }
+                })
+                .catch(err => console.error('Ошибка изменения громкости тест-тона:', err));
+            }, 150);
+        }
+
+        function ttSetStatusText() {
+            const labels = { both: 'оба канала', left: 'левый канал', right: 'правый канал' };
+            const statusEl = document.getElementById('tt-status');
+            statusEl.textContent = `🔊 Играет: ${Math.round(ttCurrent.frequency)} Гц, ${labels[ttCurrent.channel] || ttCurrent.channel}, громкость ${ttCurrent.volume}%`;
+            statusEl.classList.remove('autostopped');
+            statusEl.classList.add('playing');
+        }
+
+        function ttSetUiActive(active) {
+            ttActive = active;
+            document.getElementById('tt-stop-btn').disabled = !active;
+            document.getElementById('tt-start-btn').textContent = active
+                ? '🔄 Сброс на безопасную громкость'
+                : '▶️ Запустить тон';
+            if (active) {
+                if (!ttPollTimer) {
+                    ttPollTimer = setInterval(ttPollStatus, 4000);
+                }
+            } else {
+                if (ttPollTimer) {
+                    clearInterval(ttPollTimer);
+                    ttPollTimer = null;
+                }
+                document.getElementById('tt-status').classList.remove('playing');
+            }
+        }
+
+        function ttStart() {
+            const frequency = document.getElementById('tt-frequency').value;
+            const startBtn = document.getElementById('tt-start-btn');
+            startBtn.disabled = true;
+
+            fetch('/api/test_tone/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `frequency=${encodeURIComponent(frequency)}&channel=${encodeURIComponent(ttChannel)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    // Каждый Start (в т.ч. смена частоты/канала на лету) откатывает громкость
+                    // на безопасный минимум - это осознанное поведение, не баг
+                    document.getElementById('tt-volume').value = data.volume;
+                    document.getElementById('tt-volume-value').textContent = data.volume + '%';
+                    ttCurrent = { frequency: data.frequency, channel: data.channel, volume: data.volume };
+                    ttSetUiActive(true);
+                    ttSetStatusText();
+                } else {
+                    alert('❌ Ошибка запуска тест-тона: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('❌ Ошибка запуска тест-тона');
+            })
+            .finally(() => {
+                startBtn.disabled = false;
+            });
+        }
+
+        function ttStop() {
+            const stopBtn = document.getElementById('tt-stop-btn');
+            stopBtn.disabled = true;
+
+            fetch('/api/test_tone/stop', { method: 'POST' })
+            .then(response => response.json())
+            .then(() => {
+                ttSetUiActive(false);
+            })
+            .catch(error => {
+                console.error('Ошибка остановки тест-тона:', error);
+                stopBtn.disabled = false;
+            });
+        }
+
+        function ttPollStatus() {
+            // Пока тон играет, периодически сверяемся с сервером - таймер автостопа безопасности
+            // может остановить тон, пока пользователь ничего не трогал в интерфейсе
+            fetch('/api/test_tone/status')
+            .then(response => response.json())
+            .then(data => {
+                if (!data.active && ttActive) {
+                    ttSetUiActive(false);
+                    const statusEl = document.getElementById('tt-status');
+                    statusEl.textContent = '⏱️ Тон автоматически остановлен по таймауту безопасности (25с без действий)';
+                    statusEl.classList.add('autostopped');
+                }
+            })
+            .catch(error => console.error('Ошибка опроса статуса тест-тона:', error));
+        }
+
+        function ttRestoreState() {
+            // После перезагрузки страницы (или открытия в новой вкладке) подтягиваем реальное
+            // состояние с сервера - тон мог продолжать играть, пока страница была закрыта
+            fetch('/api/test_tone/status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.active) {
+                    ttSetChannel(data.channel);  // ttActive ещё false - лишнего запроса не вызовет
+                    document.getElementById('tt-frequency').value = Math.round(data.frequency);
+                    document.getElementById('tt-freq-slider').value = ttSliderFromFreq(data.frequency);
+                    document.getElementById('tt-volume').value = data.volume;
+                    document.getElementById('tt-volume-value').textContent = data.volume + '%';
+                    ttCurrent = { frequency: data.frequency, channel: data.channel, volume: data.volume };
+                    ttSetUiActive(true);
+                    ttSetStatusText();
+                }
+            })
+            .catch(error => console.error('Ошибка получения статуса тест-тона:', error));
+        }
         
         // Функции управления системой
         function systemAction(action) {

@@ -377,7 +377,23 @@ player_state = {
     'playlist_index': -1,
     'audio_enhancement': load_audio_enhancement_setting(),  # Загружаем сохраненную предустановку
     'cue_tracks': None,  # Список треков CUE для текущего файла
-    'current_cue_track': None  # Текущий трек CUE (определяется по позиции)
+    'current_cue_track': None,  # Текущий трек CUE (определяется по позиции)
+    'test_tone_active': False  # Флаг: сейчас играет тестовый тон, а не обычный трек
+}
+
+# Генератор тестового тона (диагностика кроссовера CamillaDSP)
+TEST_TONE_MIN_FREQUENCY = 20
+TEST_TONE_MAX_FREQUENCY = 20000
+TEST_TONE_DEFAULT_VOLUME = 8      # % — безопасный стартовый уровень при каждом Start
+TEST_TONE_MAX_VOLUME = 60         # % — потолок регулятора, полный уровень тут не нужен
+TEST_TONE_AUTOSTOP_SECONDS = 25   # автостоп, если про тон забыли посреди измерения
+
+test_tone_state = {
+    'active': False,
+    'frequency': 1000.0,
+    'channel': 'both',
+    'volume': TEST_TONE_DEFAULT_VOLUME,
+    'stop_timer': None
 }
 
 # Состояние монитора HDMI
@@ -480,6 +496,10 @@ def stop_fbi():
 def update_position_if_playing():
     """Обновляет позицию если трек играет"""
     global player_state, last_position_update
+
+    if player_state.get('test_tone_active'):
+        # Тестовый тон не имеет "конца трека" - не даём фоновому монитору его останавливать
+        return
 
     current_time = time.time()
 
@@ -1686,6 +1706,191 @@ def get_audio_status():
 
     return status
 
+def build_test_tone_lavfi_url(frequency, channel='both'):
+    """Строит av://lavfi URL для синуса нужной частоты/канала (используется в MPV loadfile)"""
+    frequency = max(TEST_TONE_MIN_FREQUENCY, min(TEST_TONE_MAX_FREQUENCY, float(frequency)))
+
+    if channel == 'left':
+        pan = 'pan=stereo|c0=c0|c1=0'
+    elif channel == 'right':
+        pan = 'pan=stereo|c0=0|c1=c0'
+    else:
+        pan = 'pan=stereo|c0=c0|c1=c0'
+
+    return f"av://lavfi:sine=frequency={frequency}:sample_rate=48000,{pan}"
+
+def _set_test_tone_mpv_volume(volume_percent):
+    """Выставляет громкость MPV для тест-тона (та же формула *1.3, что и у обычного плеера)"""
+    mpv_volume = int(volume_percent * 1.3)
+    mpv_command({"command": ["set_property", "volume", mpv_volume]})
+
+def cancel_test_tone_autostop():
+    """Отменяет ранее запланированный автостоп тест-тона"""
+    timer = test_tone_state.get('stop_timer')
+    if timer:
+        timer.cancel()
+    test_tone_state['stop_timer'] = None
+
+def schedule_test_tone_autostop():
+    """(Пере)запускает таймер безопасности - тест-тон не должен играть без присмотра"""
+    cancel_test_tone_autostop()
+    timer = threading.Timer(TEST_TONE_AUTOSTOP_SECONDS, _autostop_test_tone)
+    timer.daemon = True
+    test_tone_state['stop_timer'] = timer
+    timer.start()
+
+def _autostop_test_tone():
+    """Callback таймера: аварийно глушит тест-тон по истечении безопасного времени"""
+    logger.info(f"⏱️ Автостоп тест-тона по таймауту {TEST_TONE_AUTOSTOP_SECONDS}с (защита динамика)")
+    mpv_command({"command": ["stop"]})
+    test_tone_state['active'] = False
+    test_tone_state['stop_timer'] = None
+    player_state['test_tone_active'] = False
+    if player_state.get('status') == 'playing' and player_state.get('track', '').startswith('🔊 Тест-тон'):
+        player_state['status'] = 'stopped'
+        player_state['track'] = ''
+
+TEST_TONE_CHANNEL_LABELS = {'both': 'оба канала', 'left': 'левый канал', 'right': 'правый канал'}
+
+@app.route('/api/test_tone/start', methods=['POST'])
+def start_test_tone():
+    """Запускает генератор тестового тона через MPV (av://lavfi), минуя файловую систему.
+    Сигнал идёт по штатной цепочке ALSA default -> Loopback -> CamillaDSP -> Scarlett,
+    так что проверяется именно тот тракт, который слышат динамики."""
+    global test_tone_state
+
+    try:
+        frequency = float(request.form.get('frequency', 1000))
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'Некорректная частота'}), 400
+    frequency = max(TEST_TONE_MIN_FREQUENCY, min(TEST_TONE_MAX_FREQUENCY, frequency))
+
+    channel = request.form.get('channel', 'both')
+    if channel not in TEST_TONE_CHANNEL_LABELS:
+        channel = 'both'
+
+    # Останавливаем обычное воспроизведение, если играло, чтобы не путать состояния
+    if player_state.get('status') in ('playing', 'paused') and not player_state.get('test_tone_active'):
+        mpv_command({"command": ["stop"]})
+
+    ensure_mpv_is_running()
+    mpv_command({"command": ["set_property", "vid", "no"]})
+
+    # ВАЖНО: всегда стартуем с безопасного минимального уровня, а не с последнего использованного
+    volume_percent = TEST_TONE_DEFAULT_VOLUME
+    _set_test_tone_mpv_volume(volume_percent)
+
+    url = build_test_tone_lavfi_url(frequency, channel)
+    mpv_result = mpv_command({"command": ["loadfile", url, "replace"]})
+    if mpv_result.get("status") == "error":
+        logger.error(f"Ошибка запуска тест-тона: {mpv_result}")
+        return jsonify({'status': 'error', 'message': 'Не удалось запустить генератор в MPV'}), 500
+
+    mpv_command({"command": ["set_property", "pause", False]})
+
+    test_tone_state.update({
+        'active': True,
+        'frequency': frequency,
+        'channel': channel,
+        'volume': volume_percent,
+    })
+
+    player_state['status'] = 'playing'
+    player_state['track'] = f"🔊 Тест-тон {int(frequency)} Гц ({TEST_TONE_CHANNEL_LABELS[channel]})"
+    player_state['test_tone_active'] = True
+
+    schedule_test_tone_autostop()
+
+    logger.info(f"🎛️ Тест-тон запущен: {frequency} Гц, канал={channel}, громкость={volume_percent}% (автостоп через {TEST_TONE_AUTOSTOP_SECONDS}с)")
+    return jsonify({'status': 'ok', 'frequency': frequency, 'channel': channel, 'volume': volume_percent,
+                     'autostop_seconds': TEST_TONE_AUTOSTOP_SECONDS})
+
+@app.route('/api/test_tone/update', methods=['POST'])
+def update_test_tone():
+    """Меняет частоту и/или канал уже играющего тест-тона, громкость НЕ трогает.
+    В отличие от /start (который всегда откатывает громкость на безопасный минимум),
+    это используется для живой подстройки слайдером/пресетами без прерывания измерения."""
+    if not test_tone_state['active']:
+        return jsonify({'status': 'error', 'message': 'Генератор не запущен'}), 400
+
+    frequency_raw = request.form.get('frequency')
+    if frequency_raw is not None:
+        try:
+            frequency = float(frequency_raw)
+        except (TypeError, ValueError):
+            return jsonify({'status': 'error', 'message': 'Некорректная частота'}), 400
+        frequency = max(TEST_TONE_MIN_FREQUENCY, min(TEST_TONE_MAX_FREQUENCY, frequency))
+    else:
+        frequency = test_tone_state['frequency']
+
+    channel = request.form.get('channel', test_tone_state['channel'])
+    if channel not in TEST_TONE_CHANNEL_LABELS:
+        channel = test_tone_state['channel']
+
+    url = build_test_tone_lavfi_url(frequency, channel)
+    mpv_result = mpv_command({"command": ["loadfile", url, "replace"]})
+    if mpv_result.get("status") == "error":
+        logger.error(f"Ошибка обновления тест-тона: {mpv_result}")
+        return jsonify({'status': 'error', 'message': 'Не удалось обновить генератор'}), 500
+
+    mpv_command({"command": ["set_property", "pause", False]})
+    _set_test_tone_mpv_volume(test_tone_state['volume'])  # на всякий случай подтверждаем громкость
+
+    test_tone_state['frequency'] = frequency
+    test_tone_state['channel'] = channel
+    player_state['track'] = f"🔊 Тест-тон {int(frequency)} Гц ({TEST_TONE_CHANNEL_LABELS[channel]})"
+
+    schedule_test_tone_autostop()  # живая подстройка - это активность пользователя, продлеваем окно
+
+    return jsonify({'status': 'ok', 'frequency': frequency, 'channel': channel, 'volume': test_tone_state['volume']})
+
+@app.route('/api/test_tone/volume', methods=['POST'])
+def set_test_tone_volume():
+    """Меняет громкость уже играющего тест-тона и продлевает таймер автостопа"""
+    if not test_tone_state['active']:
+        return jsonify({'status': 'error', 'message': 'Генератор не запущен'}), 400
+
+    try:
+        volume_percent = float(request.form.get('volume', TEST_TONE_DEFAULT_VOLUME))
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'Некорректное значение громкости'}), 400
+
+    volume_percent = max(0, min(TEST_TONE_MAX_VOLUME, volume_percent))
+    _set_test_tone_mpv_volume(volume_percent)
+    test_tone_state['volume'] = volume_percent
+
+    schedule_test_tone_autostop()  # активность пользователя продлевает окно безопасности
+
+    return jsonify({'status': 'ok', 'volume': volume_percent})
+
+@app.route('/api/test_tone/stop', methods=['POST'])
+def stop_test_tone():
+    """Останавливает генератор тестового тона"""
+    cancel_test_tone_autostop()
+    mpv_command({"command": ["stop"]})
+
+    test_tone_state['active'] = False
+    player_state['test_tone_active'] = False
+    if player_state.get('status') == 'playing' and player_state.get('track', '').startswith('🔊 Тест-тон'):
+        player_state['status'] = 'stopped'
+        player_state['track'] = ''
+
+    logger.info("🛑 Тест-тон остановлен")
+    return jsonify({'status': 'ok'})
+
+@app.route('/api/test_tone/status')
+def get_test_tone_status():
+    """Текущее состояние генератора - для восстановления UI после обновления страницы"""
+    return jsonify({
+        'active': test_tone_state['active'],
+        'frequency': test_tone_state['frequency'],
+        'channel': test_tone_state['channel'],
+        'volume': test_tone_state['volume'],
+        'max_volume': TEST_TONE_MAX_VOLUME,
+        'min_frequency': TEST_TONE_MIN_FREQUENCY,
+        'max_frequency': TEST_TONE_MAX_FREQUENCY,
+    })
+
 def get_power_status():
     """Получает статус управления питанием периферии"""
     try:
@@ -1785,7 +1990,10 @@ def monitor_page():
         'memory_usage': memory_usage,
         'service_status': service_status,
         'reports': reports,
-        'audio': get_audio_status()
+        'audio': get_audio_status(),
+        'test_tone_default_volume': TEST_TONE_DEFAULT_VOLUME,
+        'test_tone_max_volume': TEST_TONE_MAX_VOLUME,
+        'test_tone_autostop_seconds': TEST_TONE_AUTOSTOP_SECONDS,
     }
 
     return render_template('monitor.html', **monitor_data)
