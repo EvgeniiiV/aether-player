@@ -5,3 +5,8 @@ python-socketio==5.8.0
 python-engineio==4.7.1
 gevent==23.7.0
 gunicorn==21.2.0
+PyYAML>=6.0
+websocket_client>=1.6
+# camilladsp==4.0.0 - НЕ на PyPI, установлен вручную (скопирован из
+# /opt/camillagui-server/venv/.../site-packages/camilladsp в это venv).
+# Нужен для кнопки MONO (/api/mono/*) - прямое управление CamillaDSP через WebSocket.

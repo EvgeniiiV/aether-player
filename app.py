@@ -28,6 +28,12 @@ try:
 except ImportError:
     SOCKETIO_AVAILABLE = False
 
+try:
+    from camilladsp import CamillaClient
+    CAMILLADSP_AVAILABLE = True
+except ImportError:
+    CAMILLADSP_AVAILABLE = False
+
 from werkzeug.utils import secure_filename
 
 from werkzeug.utils import secure_filename
@@ -970,6 +976,11 @@ def audio_settings():
     """Страница настроек виртуальной стереосцены"""
     return render_template("audio_settings.html")
 
+@app.route("/source")
+def audio_source():
+    """Страница выбора источника звука (HDD / Вход 1-2 / Вход 3-4)"""
+    return render_template("source.html")
+
 @app.route("/browse/")
 @app.route("/browse/<path:subpath>")
 def browse(subpath=""):
@@ -1121,7 +1132,15 @@ def get_status():
 
         if track_index is not None:
             if track_index < len(cue_tracks) - 1:
-                track_end = cue_tracks[track_index + 1].get('relative_time_seconds', 0)
+                next_track = cue_tracks[track_index + 1]
+                if next_track.get('file') == current_cue.get('file'):
+                    track_end = next_track.get('relative_time_seconds', 0)
+                else:
+                    # Следующий трек CUE находится в другом физическом файле
+                    # (multi-file CUE, как в "файл на трек" альбомах) - relative_time_seconds
+                    # следующего трека тут бессмысленно (он ~0 в своём файле), текущий
+                    # трек идёт до конца СВОЕГО файла
+                    track_end = player_state['duration']
             else:
                 track_end = player_state['duration']
 
@@ -2507,6 +2526,100 @@ def navigate_hdmi_display_image():
         })
     else:
         return jsonify({'status': 'error', 'message': 'Failed to display image'}), 500
+
+# ===== API для переключения источника звука (HDD / Вход 1-2 / Вход 3-4) =====
+
+@app.route("/api/source/status", methods=['GET'])
+def get_audio_source_status():
+    """Текущий активный источник звука, который слушает CamillaDSP"""
+    try:
+        result = subprocess.run(['/usr/local/bin/audio-input', '--json', 'status'],
+                                 capture_output=True, text=True, timeout=10)
+        data = json.loads(result.stdout)
+        return jsonify({'status': 'success', 'source': data.get('source', 'hdd')})
+    except Exception as e:
+        logger.error(f"Ошибка получения статуса источника звука: {e}")
+        return jsonify({'status': 'error', 'error': str(e)})
+
+@app.route("/api/source/select", methods=['POST'])
+def select_audio_source():
+    """Переключить источник звука: hdd / in12 (вход 1-2) / in34 (вход 3-4)"""
+    source = request.json.get('source', 'hdd')
+    if source not in ('hdd', 'in12', 'in34'):
+        return jsonify({'status': 'error', 'error': f'Неизвестный источник: {source}'})
+    try:
+        result = subprocess.run(['/usr/local/bin/audio-input', source],
+                                 capture_output=True, text=True, timeout=15)
+        if result.returncode == 0:
+            logger.info(f"Источник звука переключен на: {source}")
+            return jsonify({'status': 'success', 'source': source, 'message': result.stdout})
+        else:
+            logger.error(f"Ошибка переключения источника звука: {result.stderr}")
+            return jsonify({'status': 'error', 'error': result.stderr or result.stdout})
+    except Exception as e:
+        logger.error(f"Исключение при переключении источника звука: {e}")
+        return jsonify({'status': 'error', 'error': str(e)})
+
+# ===== API для кнопки MONO (проверка симметрии усиления/колонок на слух) =====
+
+MONO_SUM_STEP_NAME = "mono_sum"
+
+def _camilladsp_client():
+    """Короткое подключение к WebSocket CamillaDSP для одной операции"""
+    c = CamillaClient('127.0.0.1', 1234)
+    c.connect()
+    return c
+
+def _find_mono_sum_index(pipeline):
+    """Находит индекс шага mono_sum в pipeline активного конфига CamillaDSP"""
+    for i, step in enumerate(pipeline):
+        if step.get('type') == 'Mixer' and step.get('name') == MONO_SUM_STEP_NAME:
+            return i
+    return None
+
+@app.route("/api/mono/status", methods=['GET'])
+def get_mono_status():
+    """Текущее состояние режима MONO (включено = шаг mono_sum не bypassed)"""
+    if not CAMILLADSP_AVAILABLE:
+        return jsonify({'status': 'error', 'error': 'camilladsp library не установлена'})
+    try:
+        c = _camilladsp_client()
+        cfg = c.config.active()
+        idx = _find_mono_sum_index(cfg.get('pipeline', []))
+        if idx is None:
+            return jsonify({'status': 'error', 'error': 'Шаг mono_sum не найден в активном конфиге CamillaDSP'})
+        bypassed = cfg['pipeline'][idx].get('bypassed')
+        return jsonify({'status': 'success', 'mono': not bypassed})
+    except Exception as e:
+        logger.error(f"Ошибка получения статуса MONO: {e}")
+        return jsonify({'status': 'error', 'error': str(e)})
+
+@app.route("/api/mono/toggle", methods=['POST'])
+def toggle_mono():
+    """Включить/выключить суммирование L+R в моно (живой bypass, без перезагрузки конфига)"""
+    if not CAMILLADSP_AVAILABLE:
+        return jsonify({'status': 'error', 'error': 'camilladsp library не установлена'})
+    try:
+        c = _camilladsp_client()
+        cfg = c.config.active()
+        idx = _find_mono_sum_index(cfg.get('pipeline', []))
+        if idx is None:
+            return jsonify({'status': 'error', 'error': 'Шаг mono_sum не найден в активном конфиге CamillaDSP'})
+
+        body = request.get_json(silent=True) or {}
+        if 'enable' in body:
+            enable = bool(body['enable'])
+        else:
+            # Без явного enable - просто переключаем текущее состояние
+            currently_bypassed = cfg['pipeline'][idx].get('bypassed')
+            enable = bool(currently_bypassed)
+
+        c.config.set_value(f'/pipeline/{idx}/bypassed', not enable)
+        logger.info(f"MONO режим: {'включен' if enable else 'выключен'}")
+        return jsonify({'status': 'success', 'mono': enable})
+    except Exception as e:
+        logger.error(f"Ошибка переключения MONO: {e}")
+        return jsonify({'status': 'error', 'error': str(e)})
 
 # Запуск сервера
 if __name__ == "__main__":

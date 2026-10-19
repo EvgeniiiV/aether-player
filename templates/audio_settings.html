@@ -232,6 +232,16 @@
     </div>
 
     <div class="preset-section">
+        <h2>🔊 Проверка MONO</h2>
+        <p style="color:#bbb; font-size:0.9em; margin-bottom:10px; line-height:1.4;">
+            Суммирует левый и правый каналы в моно (уже после текущей эквализации колонок)
+            и подаёт одинаковый сигнал на обе стороны. Удобно проверить на слух: усиливают
+            ли оба канала одинаково громко и нет ли заметной асимметрии звучания динамиков.
+        </p>
+        <button id="monoButton" class="apply-button" onclick="toggleMono()">🔊 Включить MONO</button>
+    </div>
+
+    <div class="preset-section">
         <h2>📋 Предустановки</h2>
         <div class="preset-grid" id="presetGrid">
             <!-- Предустановки будут загружены через JavaScript -->
@@ -361,7 +371,58 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadPresets();
             setupSliders();
+            loadMonoStatus();
         });
+
+        let monoEnabled = false;
+
+        async function loadMonoStatus() {
+            try {
+                const response = await fetch('/api/mono/status');
+                const data = await response.json();
+                if (data.status === 'success') {
+                    monoEnabled = data.mono;
+                    updateMonoButton();
+                }
+            } catch (error) {
+                console.error('Ошибка получения статуса MONO:', error);
+            }
+        }
+
+        async function toggleMono() {
+            const btn = document.getElementById('monoButton');
+            btn.disabled = true;
+            try {
+                const response = await fetch('/api/mono/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enable: !monoEnabled })
+                });
+                const data = await response.json();
+                if (data.status === 'success') {
+                    monoEnabled = data.mono;
+                    updateMonoButton();
+                    showStatus(monoEnabled ? 'MONO включен' : 'MONO выключен', 'info');
+                } else {
+                    showStatus('Ошибка MONO: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showStatus('Ошибка переключения MONO: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function updateMonoButton() {
+            const btn = document.getElementById('monoButton');
+            if (monoEnabled) {
+                btn.textContent = '🔊 MONO включен (нажмите, чтобы выключить)';
+                btn.style.background = '#cc4444';
+            } else {
+                btn.textContent = '🔊 Включить MONO';
+                btn.style.background = '';
+            }
+        }
 
         async function loadPresets() {
             try {

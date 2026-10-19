@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Источник звука - Aether Player</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #222;
+            color: #eee;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #444;
+        }
+
+        .back-button {
+            background: #666;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .back-button:hover {
+            background: #777;
+        }
+
+        .info-section {
+            background: #1a2a3a;
+            border-left: 4px solid #4488ff;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 0 5px 5px 0;
+        }
+
+        .source-section {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .source-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .source-card {
+            background: #333;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .source-card:hover:not(.active) {
+            border-color: #666;
+            background: #383838;
+        }
+
+        .source-card.active {
+            border-color: #4488ff;
+            background: #2a3a4a;
+            box-shadow: 0 0 15px rgba(68, 136, 255, 0.4);
+        }
+
+        .source-card.active .source-name {
+            color: #66aaff;
+        }
+
+        .source-card.loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .source-icon {
+            font-size: 2em;
+            margin-bottom: 8px;
+        }
+
+        .source-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #4488ff;
+        }
+
+        .source-description {
+            color: #bbb;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+
+        .status-message {
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .status-message.success {
+            background: #2a4a2a;
+            color: #8f8;
+            border: 1px solid #4a4;
+        }
+
+        .status-message.error {
+            background: #4a2a2a;
+            color: #f88;
+            border: 1px solid #a44;
+        }
+
+        .status-message.info {
+            background: #2a2a4a;
+            color: #88f;
+            border: 1px solid #44a;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔀 Источник звука</h1>
+        <a href="/" class="back-button">← Назад к плееру</a>
+    </div>
+
+    <div class="info-section">
+        <p>CamillaDSP всегда применяет текущий кроссовер/эквализацию, независимо от источника — переключение здесь только выбирает, <strong>что</strong> идёт на обработку, а не изменяет сам звуковой профиль.</p>
+    </div>
+
+    <div class="source-section">
+        <h2>📻 Выберите источник</h2>
+        <div class="source-grid" id="sourceGrid">
+            <div class="source-card" data-source="hdd" onclick="selectSource('hdd')">
+                <div class="source-icon">💻</div>
+                <div class="source-name">HDD</div>
+                <div class="source-description">Компьютер (aether-player, воспроизведение с жёсткого диска)</div>
+            </div>
+            <div class="source-card" data-source="in12" onclick="selectSource('in12')">
+                <div class="source-icon">📱</div>
+                <div class="source-name">Вход 1-2</div>
+                <div class="source-description">Line In 1-2 карты Scarlett (например, телефон через mini-jack → RCA)</div>
+            </div>
+            <div class="source-card" data-source="in34" onclick="selectSource('in34')">
+                <div class="source-icon">🎧</div>
+                <div class="source-name">Вход 3-4</div>
+                <div class="source-description">Line In 3-4 карты Scarlett (например, винил через фонокорректор)</div>
+            </div>
+        </div>
+        <div class="status-message" id="statusMessage"></div>
+    </div>
+
+    <script>
+        async function loadStatus() {
+            try {
+                const response = await fetch('/api/source/status');
+                const data = await response.json();
+                if (data.status === 'success') {
+                    updateActiveCard(data.source);
+                }
+            } catch (error) {
+                console.error('Ошибка получения текущего источника:', error);
+            }
+        }
+
+        async function selectSource(source) {
+            const card = document.querySelector(`.source-card[data-source="${source}"]`);
+            card.classList.add('loading');
+            try {
+                const response = await fetch('/api/source/select', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source: source })
+                });
+                const data = await response.json();
+                if (data.status === 'success') {
+                    updateActiveCard(data.source);
+                    showStatus('Источник переключен: ' + sourceLabel(data.source), 'success');
+                } else {
+                    showStatus('Ошибка: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showStatus('Ошибка переключения источника: ' + error.message, 'error');
+            } finally {
+                card.classList.remove('loading');
+            }
+        }
+
+        function sourceLabel(source) {
+            return { hdd: 'HDD', in12: 'Вход 1-2', in34: 'Вход 3-4' }[source] || source;
+        }
+
+        function updateActiveCard(source) {
+            document.querySelectorAll('.source-card').forEach(c => {
+                c.classList.toggle('active', c.dataset.source === source);
+            });
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.textContent = message;
+            statusDiv.className = `status-message ${type}`;
+            statusDiv.style.display = 'block';
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        loadStatus();
+    </script>
+</body>
+</html>
